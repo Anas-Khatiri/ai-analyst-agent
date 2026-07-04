@@ -75,6 +75,10 @@ When a decision must combine the outputs of multiple tools — e.g., a retrainin
 
 ### 6.4 Dynamic Skill-Script Loading and Sibling Imports
 Agent tools dynamically load Phase 2 skill scripts via `shared/skill_loader.py::load_skill_script`, which executes a script by file path (skill scripts are intentionally not an installable package — they must stay runnable standalone). If a skill script needs a sibling module, rely on the loader — it adds the script's own directory to `sys.path` before executing it. Do not add ad hoc `sys.path` manipulation inside individual skill scripts.
+*   **Interim state**: `shared/skill_loader.py` does not exist yet. Until it does, a skill's own test file is the one place permitted to insert the skill's `scripts/` directory onto `sys.path` before importing it (see `tests/skills/test_data_drift_analysis.py` for the pattern) — this is scoped to test harnesses, not a loophole for the "no ad hoc `sys.path` in skill scripts" rule above. Once the loader lands, tests should switch to loading through it instead, so the same code path is exercised as production.
+
+### 6.5 The Shared Finding Contract
+The `Finding`/`EvidenceItem`/`HypothesisCandidate`/`ActionItem` shapes specified in `skill_contract.md §5` live in `shared/schemas/finding.py` — every skill's `run()` entrypoint returns a `Finding` constructed from these models (`extra="forbid"`), never an ad hoc dict or a skill-local reimplementation of the same shape.
 
 ---
 
