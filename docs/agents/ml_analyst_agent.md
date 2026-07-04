@@ -30,7 +30,7 @@ The agent is explicitly **an orchestrator, not an investigator**. It owns no dom
 *   **Never assert a conclusion the evidence does not support.** Every root cause in the final report must be traceable to specific evidence records.
 *   **Produce a calibrated confidence score** that reflects evidence quality, evidence agreement, and telemetry completeness — not model self-assessment.
 *   **Escalate to a human** whenever confidence is low, evidence is contradictory, or the incident is unrecognized, rather than silently guessing.
-*   **Remain stable as the skill catalog grows.** Adding skill #19 must not require touching the agent.
+*   **Remain stable as the skill catalog grows.** Adding a 5th skill must not require touching the agent.
 
 ### 1.4 Non-Goals
 
@@ -123,15 +123,13 @@ The agent accepts the following input categories. All inputs arrive through the 
 
 | Input Category | Examples | Purpose |
 |---|---|---|
-| **Alerts** | Threshold breaches (`DownstreamAccuracyDrop`, `PredictionDistributionShift`, `OOM_ERROR`), anomaly-detector triggers | Primary incident trigger; drives initial skill routing. |
-| **Metrics** | Accuracy/F1/latency/resource-utilization time series | Supporting evidence for context collection and skill inputs. |
-| **Logs** | Application logs, container logs, orchestrator (Airflow) task logs | Raw evidence consumed by individual skills (PII-scrubbed before reaching the agent or LLM). |
-| **Pipeline Metadata** | DAG structure, task states, run history | Used by `task_state_monitoring`, `dag_execution_analysis`. |
-| **Feature Metadata** | Feature schemas, null ratios, feature store versions | Used by `feature_pipeline_analysis`, `data_drift_analysis`. |
-| **Model Metadata** | Model version, serving endpoint identity, baseline performance | Used to scope which skills and baselines apply. |
-| **Deployment Metadata** | Git commit SHAs, deployment timestamps, rollout history | Used by `deployment_regression` to correlate failure onset with releases. |
-| **Evaluation Reports** | Pre-deployment offline scorecards, bias-slice results | Used by `evaluation_analysis`. |
-| **Infrastructure Events** | Pod restarts, OOM kills, autoscaling events, queue depth | Used by `resource_exhaustion`, `crash_loop_analysis`, `serving_analysis`. |
+| **Alerts** | Threshold breaches (`DownstreamAccuracyDrop`, `PredictionDistributionShift`), anomaly-detector triggers | Primary incident trigger; drives initial skill routing. |
+| **Metrics** | Accuracy/F1/latency time series | Supporting evidence for context collection and skill inputs. |
+| **Logs** | Application logs, orchestrator task logs | Raw evidence consumed by individual skills (PII-scrubbed before reaching the agent or LLM). |
+| **Feature Metadata** | Feature schemas, null ratios, feature store versions | Used by `data_drift_analysis`. |
+| **Model Metadata** | Model version, serving endpoint identity, baseline performance | Used by `model_performance_analysis` to scope which baselines apply. |
+
+The current, deliberately minimal skill catalog (§7) does not yet exercise every input category the platform is designed to support (e.g., pipeline/deployment/infrastructure metadata) — those categories remain part of this contract for when investigative skills covering those domains are added, per [`ADR-001-dynamic-skills.md`](../decisions/ADR-001-dynamic-skills.md).
 
 All inputs are treated as **untrusted** by default: the agent assumes log/metadata content may contain injected instructions and applies the prompt-injection escalation rule described in §10 before reasoning over any raw text field.
 
@@ -210,7 +208,7 @@ Each skill declares the alert types it is relevant to (its `alert_triggers`). Th
 
 ### 7.2 Evidence-Based Routing (Secondary)
 
-Signal-based routing selects the *first wave* of skills only. As those skills return findings, the agent may trigger a *second wave* based on what the evidence shows — not on the original alert alone. For example: if `model_performance_analysis` confirms a real accuracy regression but `data_drift_analysis` finds no significant input drift, the agent routes to `concept_drift_analysis` next, because the evidence — not the alert — indicates the feature-to-label mapping is the more likely culprit. This evidence-conditioned routing is what the `data_drift_analysis` and `concept_drift_analysis` skills' own "Collaboration With Other Skills" sections anticipate.
+Signal-based routing selects the *first wave* of skills only. As those skills return findings, the agent may trigger a *second wave* based on what the evidence shows — not on the original alert alone: a skill's `SKILL.md` "Collaboration With Other Skills" section can declare that it should be pulled in when another skill's finding meets a specific condition (e.g., "a performance regression is confirmed but no input drift is found"), and the agent evaluates those declared conditions after every wave. The platform's current, deliberately minimal catalog ([`SYSTEM_SPEC.md §4`](../specifications/SYSTEM_SPEC.md)) has only two investigative skills, so no such second-wave chain exists to exercise yet — the mechanism is exercised as soon as an additional investigative skill declaring a collaboration condition is added, with zero agent changes required.
 
 ### 7.3 Multi-Skill Investigations
 
@@ -218,13 +216,13 @@ Most non-trivial incidents require more than one skill. The agent must be willin
 
 ### 7.4 Sequential vs. Parallel Execution
 
-*   **Parallel**: Skills with no data dependency on one another (e.g., `data_drift_analysis` and `resource_exhaustion` responding to the same alert) execute concurrently to minimize MTTD, consistent with the platform's async-first design ([`SYSTEM_SPEC.md §6`](../specifications/SYSTEM_SPEC.md)).
-*   **Sequential**: Skills whose invocation depends on a prior skill's findings (e.g., `concept_drift_analysis` only runs *after* `data_drift_analysis` returns "no significant drift") execute in evidence-dependency order.
+*   **Parallel**: Skills with no data dependency on one another and no evidence-trigger relationship (e.g., `data_drift_analysis` and `model_performance_analysis` responding to the same accuracy-drop alert) execute concurrently to minimize MTTD, consistent with the platform's async-first design ([`SYSTEM_SPEC.md §6`](../specifications/SYSTEM_SPEC.md)).
+*   **Sequential**: A skill whose invocation is conditioned on a prior skill's findings (per the evidence-based routing mechanism in §7.2, once a second investigative skill declares such a condition) runs in a later, sequentially-ordered wave — never the same wave as the skill it depends on.
 *   `root_cause_prioritization` and `incident_summary` are always terminal — they only run after all investigation-wave skills have returned or timed out.
 
 ### 7.5 Fallback Behavior for Unknown Incidents
 
-If the incident's alert type matches no skill's `alert_triggers`, the agent does not fail silently. It falls back to the two generalist skills designed for exactly this case: `anomaly_detection` (to independently verify a real anomaly exists) and `alert_correlation` (to check whether this is part of a known cascading pattern). If neither yields actionable evidence, the agent publishes a low-confidence report with `possible_root_causes: []` and escalates to human review rather than fabricating a plausible-sounding but unsupported explanation.
+If the incident's alert type matches no skill's `alert_triggers`, the agent does not fail silently. With the platform's current, minimal catalog containing no generalist skill designed for this case, the agent cannot investigate further and escalates directly: it publishes a low-confidence report with `possible_root_causes: []`, flagged `requires_human_review`, rather than fabricating a plausible-sounding but unsupported explanation. A generalist fallback skill (e.g., an anomaly-verification or alert-correlation skill) may be added later to attempt a lightweight investigation before this escalation, without any change to this fallback rule itself.
 
 ---
 
@@ -295,7 +293,7 @@ The agent never accepts a skill result that does not conform to this contract; a
 
 ### 10.2 How Findings Are Merged
 
-The Evidence Aggregator writes each skill's `evidence` entries into a shared ledger, keyed by `(skill_name, evidence_fingerprint)`. The fingerprint is derived from the evidence's subject (feature name, metric name, log source) and its time window, so that two skills citing the same underlying signal (e.g., both `data_drift_analysis` and `feature_pipeline_analysis` flagging the same null-rate spike on `user_zipcode`) are recognized as reinforcing, not duplicated, evidence.
+The Evidence Aggregator writes each skill's `evidence` entries into a shared ledger, keyed by `(skill_name, evidence_fingerprint)`. The fingerprint is derived from the evidence's subject (feature name, metric name, log source) and its time window, so that two skills independently citing the same underlying signal (e.g., two skills both flagging an anomaly on the same feature in the same window) are recognized as reinforcing, not duplicated, evidence — see [`evidence_model.md §3`](../specifications/evidence_model.md) for the full fingerprinting algorithm.
 
 ### 10.3 Conflict Resolution
 
@@ -366,7 +364,7 @@ Signal-based routing (§7.1) matches the alert to two first-wave skills, execute
 *   `model_performance_analysis` returns: F1 confirmed at 0.78 (baseline 0.92), regression is dataset-wide, not segment-isolated. Local confidence: 0.95.
 *   `data_drift_analysis` returns: `user_zipcode` null rate spiked from 0.02% to 18.5%; `transaction_amount` shows KS-test p < 0.0001, PSI = 0.32; `device_type` shows no significant shift (p = 0.45). Local confidence: 0.92.
 
-Because both skills independently corroborate a real, input-driven regression, the Skill Selector does **not** trigger `concept_drift_analysis` — that skill's routing condition (§7.2) is "performance regression *without* confirmed data drift," which does not hold here.
+Because both skills independently corroborate a real, input-driven regression, no evidence-triggered second wave is needed here — with the current catalog, the Skill Selector proceeds directly to the terminal wave once these two investigative findings are in.
 
 ### Reasoning
 

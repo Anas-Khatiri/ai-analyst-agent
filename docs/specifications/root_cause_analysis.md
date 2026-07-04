@@ -75,7 +75,7 @@ Each hypothesis's score is a function of the following factors — all derived s
 | **Evidence magnitude** | Higher for evidence further from baseline/threshold (e.g., a PSI of 0.32 vs. 0.11; a null rate of 18% vs. 2%). | Larger deviations are less plausibly noise. |
 | **Corroboration count** | Higher for hypotheses whose `supporting_evidence` includes entries independently corroborated by more than one skill (per [`evidence_model.md §5.1`](evidence_model.md)). | Independent agreement across skills is stronger than any single skill's claim. |
 | **Conflicting evidence penalty** | Lower for hypotheses with any `conflicting_evidence` entries, proportional to the conflicting evidence's own specificity and magnitude. | A hypothesis actively contradicted by data is weaker, not merely "also possible." |
-| **Temporal correlation** | Higher when the hypothesis's supporting evidence's timing coincides with a known event (e.g., a deployment timestamp from `deployment_regression`) that plausibly explains the mechanism. | Coincidence in time with a known change is corroborating context, not proof by itself. |
+| **Temporal correlation** | Higher when the hypothesis's supporting evidence's timing coincides with a known event (e.g., a deployment timestamp supplied via Context Metadata, per [`incident_schema.md §3.4`](incident_schema.md)) that plausibly explains the mechanism. No skill in the current catalog surfaces this kind of event directly, so this factor is presently dormant — it activates automatically once a skill contributing such evidence is added, with no change to the ranking function itself. | Coincidence in time with a known change is corroborating context, not proof by itself. |
 
 ### 3.3 What the Ranking Function Must Never Use
 

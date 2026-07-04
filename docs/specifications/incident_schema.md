@@ -79,9 +79,9 @@ The Incident Signature is the normalized, validated representation of an inciden
 
 | Field | Type | Description |
 |---|---|---|
-| `recent_deployments` | `list[DeploymentEvent]` | Deployments to the affected system within a configurable lookback window — feeds `deployment_regression`'s trigger condition. |
-| `concurrent_alerts` | `list[str]` | `incident_id`s of other currently-open incidents whose `affected_system` overlaps or whose timing suggests correlation — feeds `alert_correlation`. |
-| `model_metadata` | `ModelMetadata \| null` | Model version, serving endpoint identity, baseline performance, where the affected system is a model. |
+| `recent_deployments` | `list[DeploymentEvent]` | Deployments to the affected system within a configurable lookback window. No skill in the current catalog (`data_drift_analysis`, `model_performance_analysis`, `root_cause_prioritization`, `incident_summary`) consumes this field yet; it is retained for a future deployment-correlation skill, per [`ADR-001-dynamic-skills.md`](../decisions/ADR-001-dynamic-skills.md). |
+| `concurrent_alerts` | `list[str]` | `incident_id`s of other currently-open incidents whose `affected_system` overlaps or whose timing suggests correlation. Likewise retained for a future alert-correlation skill; unused by the current catalog. |
+| `model_metadata` | `ModelMetadata \| null` | Model version, serving endpoint identity, baseline performance — used by `model_performance_analysis` to scope which baseline applies. |
 
 ### 3.5 Validation Rules
 

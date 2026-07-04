@@ -30,7 +30,7 @@ This skill acts as the **Impact Assessment Gate** in the root-cause pipeline. Wh
 *   Handle delayed feedback (label delay) using estimation techniques like proxy metrics or predicted performance models.
 
 ### What This Skill MUST NOT Do:
-*   Analyze statistical data drift or concept drift — this is delegated to the `data_drift_analysis` and `concept_drift_analysis` skills.
+*   Analyze statistical data drift — this is delegated to the `data_drift_analysis` skill (and, once added, a future concept-drift skill).
 *   Alter model parameters, coefficients, or trigger retraining pipelines directly.
 *   Clean, filter, or restructure prediction/ground-truth logs on disk.
 
@@ -181,12 +181,12 @@ Confidence estimation is determined using a deterministic evaluation matrix:
 
 ## 12. Collaboration With Other Skills
 
-*   **Invoked Before**:
-    *   `alert_correlation`: Identifies performance alerts.
+*   **Invoked Before**: None in the current skill catalog. A future alert-correlation skill, if added, would typically run first to confirm this performance alert is not part of a broader cascading pattern.
 *   **Invoked After / In Parallel**:
-    *   `data_drift_analysis`: Triggered in parallel to verify if input changes explain the accuracy drop.
-    *   `concept_drift_analysis`: Executed if performance drops significantly but input features show no drift.
-    *   `recommendation_agent`: Receives performance statistics to decide risk levels for candidate swappings.
+    *   `data_drift_analysis`: Triggered in parallel to verify if input changes explain the accuracy drop (see [`skill_selection_engine.md §13`](../../docs/specifications/skill_selection_engine.md) for the worked example).
+    *   `root_cause_prioritization`: Uses this skill's output, alongside `data_drift_analysis`, to rank candidate causes.
+
+    A future concept-drift skill — triggered when performance drops significantly but `data_drift_analysis` finds no input drift — is not yet part of the catalog; see [`root_cause_analysis.md`](../../docs/specifications/root_cause_analysis.md) for how such an evidence-triggered second wave would work once added.
 
 ---
 

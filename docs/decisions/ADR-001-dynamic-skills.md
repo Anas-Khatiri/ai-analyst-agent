@@ -55,9 +55,9 @@ sequenceDiagram
     participant Reg as Skill Registry
     participant Agent as ML Analyst Agent
 
-    SRE->>Engine: Ingestion: alert="OOM_ERROR"
-    Engine->>Reg: query_skills(alert_type="OOM_ERROR")
-    Reg-->>Engine: return [resource_exhaustion, crash_loop_analysis]
+    SRE->>Engine: Ingestion: alert="DownstreamAccuracyDrop"
+    Engine->>Reg: query_skills(alert_type="DownstreamAccuracyDrop")
+    Reg-->>Engine: return [data_drift_analysis, model_performance_analysis]
     Engine->>Agent: Spawn agent with ONLY these 2 skills loaded
     Agent->>Agent: Reason & execute scripts
     Agent-->>Engine: Return Root Cause Analysis

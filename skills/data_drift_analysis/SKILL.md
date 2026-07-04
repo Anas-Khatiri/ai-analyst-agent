@@ -194,12 +194,12 @@ Confidence estimation is determined using a deterministic evaluation matrix:
 
 ## 12. Collaboration With Other Skills
 
-*   **Invoked Before**:
-    *   `anomaly_detection`: Alert triggers indicating out-of-range observations.
+*   **Invoked Before**: None in the current skill catalog. A future anomaly-verification skill, if added, would typically run before this one to confirm the alert reflects a real out-of-range observation.
 *   **Invoked After / In Parallel**:
-    *   `model_performance_analysis`: Invoked to correlate whether the detected data drift is actually causing performance loss.
-    *   `concept_drift_analysis`: Executed if performance drops but data drift is absent.
-    *   `root_cause_prioritization`: Uses the output of this skill to rank input shifts against infrastructure OOMs or pipeline delays.
+    *   `model_performance_analysis`: Invoked in parallel to correlate whether the detected data drift is actually causing performance loss (see [`skill_selection_engine.md §13`](../../docs/specifications/skill_selection_engine.md) for the worked example).
+    *   `root_cause_prioritization`: Uses the output of this skill, alongside `model_performance_analysis`, to rank input shifts against other candidate causes.
+
+    A future concept-drift skill — triggered when performance drops but this skill finds no significant input drift — is not yet part of the catalog; see [`root_cause_analysis.md`](../../docs/specifications/root_cause_analysis.md) for how such an evidence-triggered second wave would work once added.
 
 ---
 

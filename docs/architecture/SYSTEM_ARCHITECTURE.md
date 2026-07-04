@@ -25,8 +25,9 @@ graph TD
     subgraph Dynamic Registry
         Reg[Skill Registry]
         SK1[data_drift_analysis]
-        SK2[latency_analysis]
-        SK3[resource_exhaustion]
+        SK2[model_performance_analysis]
+        SK3[root_cause_prioritization]
+        SK4[incident_summary]
     end
 
     subgraph Infrastructure Adapters
@@ -40,6 +41,7 @@ graph TD
     Reg --> SK1
     Reg --> SK2
     Reg --> SK3
+    Reg --> SK4
     Runner <--> Agent
     Runner <--> Session
     Session <--> RD

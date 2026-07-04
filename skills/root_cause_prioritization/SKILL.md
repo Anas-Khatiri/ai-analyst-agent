@@ -17,7 +17,7 @@ This skill exists to rank and prioritize candidate root causes. It acts as the *
 ## 2. Responsibilities (What)
 
 ### What This Skill MUST Do:
-*   Consume structured outputs from other active skills (e.g. `data_drift`, `resource_exhaustion`, `task_state_monitoring`).
+*   Consume structured outputs from other active skills (e.g. `data_drift_analysis`, `model_performance_analysis`), generalizing to whichever investigative skills are registered as the catalog grows.
 *   Apply causal topology heuristics to trace dependencies (e.g., Infrastructure failure causes Pipeline failure which causes Model failure).
 *   Rank candidate root causes based on probability and impact.
 *   Compute an overall incident confidence score.

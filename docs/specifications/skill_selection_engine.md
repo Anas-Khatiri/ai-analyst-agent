@@ -16,7 +16,7 @@ This is an architecture and behavior specification. It defines decision rules, i
 
 ### 1.1 Purpose
 
-Pipeline Sentinel's diagnostic power comes from up to eighteen (and growing) independently authored Skills, each an expert in one narrow investigative question. No incident should ever require a human, or the agent itself, to reason informally over "which of these eighteen tools do I run." That decision must be made by a dedicated, deterministic, auditable component: the **Skill Selection Engine**.
+Pipeline Sentinel's diagnostic power comes from a growing catalog of independently authored Skills, each an expert in one narrow investigative question — today a deliberately minimal set of four (see [`SYSTEM_SPEC.md §4`](SYSTEM_SPEC.md)). No incident should ever require a human, or the agent itself, to reason informally over "which of these tools do I run." That decision must be made by a dedicated, deterministic, auditable component: the **Skill Selection Engine** — a component whose design must scale from four skills to dozens without change.
 
 The engine exists to answer exactly one question, repeatedly, over the life of an investigation:
 
@@ -85,7 +85,7 @@ Candidates failing either gate are removed from the set and recorded with an exp
 
 ### 3.3 Stage 3 — Specificity Scoring
 
-Surviving candidates are ordered by how *specifically* they match the incident, not merely whether they match. A skill whose `alert_triggers` entry exactly matches the incident's alert type, and whose `description` scope is narrow and directly on-point, ranks above a broad generalist skill that also happens to declare the same trigger. This prevents the engine from defaulting to broad, low-precision skills when a precise one is available, and is what makes the fallback skills (`anomaly_detection`, `alert_correlation`, §8) a last resort rather than a default.
+Surviving candidates are ordered by how *specifically* they match the incident, not merely whether they match. A skill whose `alert_triggers` entry exactly matches the incident's alert type, and whose `description` scope is narrow and directly on-point, ranks above a broad generalist skill that also happens to declare the same trigger. This prevents the engine from defaulting to broad, low-precision skills when a precise one is available, and is what makes a generalist fallback skill (§8) — should one be added to the catalog later — a last resort rather than a default.
 
 ### 3.4 Stage 4 — Budget-Constrained Selection
 
@@ -114,12 +114,12 @@ This plan is the only channel through which the engine communicates with the res
 
 ## 4. Selection Criteria: One Skill vs. Multiple Skills
 
-A single skill is sufficient when the incident signature maps unambiguously to one skill whose `scope_boundary` fully covers the suspected failure surface, and no context signal suggests a second, independent failure domain. Example: a `CrashLoopBackOff` alert with no accompanying resource-pressure metrics maps cleanly to `crash_loop_analysis` alone.
+A single skill is sufficient when the incident signature maps unambiguously to one skill whose `scope_boundary` fully covers the suspected failure surface, and no context signal suggests a second, independent failure domain. Example: an alert type that only `data_drift_analysis` declares as a trigger (e.g., a raw feature-value-out-of-range signal with no accompanying performance metric) maps cleanly to `data_drift_analysis` alone.
 
 Multiple skills are required whenever any of the following hold:
 
-*   **Ambiguous failure surface**: the observed symptom (e.g., an accuracy or F1 drop) could plausibly originate in more than one layer — input data, model behavior, or infrastructure — and no single skill's scope covers all plausible origins. The engine selects one skill per plausible origin in the same wave (e.g., `data_drift_analysis` and `model_performance_analysis` together, per the worked example in [`ml_analyst_agent.md §14`](../agents/ml_analyst_agent.md#14-example-investigation)).
-*   **Alert storm membership**: Context Metadata indicates the triggering alert is part of a correlated cluster of concurrent alerts. `alert_correlation` is selected alongside the primary signal-matched skill(s) to establish whether they share a common upstream cause.
+*   **Ambiguous failure surface**: the observed symptom (e.g., an accuracy or F1 drop) could plausibly originate in more than one layer — input data or model behavior — and no single skill's scope covers all plausible origins. The engine selects one skill per plausible origin in the same wave (e.g., `data_drift_analysis` and `model_performance_analysis` together, per the worked example in [`ml_analyst_agent.md §14`](../agents/ml_analyst_agent.md#14-example-investigation)).
+*   **Alert storm membership**: Context Metadata indicates the triggering alert is part of a correlated cluster of concurrent alerts. A dedicated alert-correlation skill, if one is registered, would be selected alongside the primary signal-matched skill(s) to establish whether they share a common upstream cause — the current minimal catalog has no such skill, so this criterion has no candidate to apply to yet.
 *   **Corroboration requirement for high-stakes categories**: for incident categories the platform configuration flags as high-stakes (e.g., categories whose recommendations could be auto-executed), the engine requires at least two independent, corroborating skills before a hypothesis is allowed to reach High confidence eligibility — a single skill's finding, however strong, is never treated as sufficient in isolation for these categories. This is a selection-time policy, not a confidence-computation rule: it manifests as the engine deliberately including a second, independent-angle skill in Wave 0 rather than waiting for a low-confidence result to trigger it reactively.
 
 Conversely, the engine must **not** select multiple skills merely because multiple skills' `alert_triggers` happen to list the same alert type loosely — Stage 3 (Specificity Scoring, §3.3) and Stage 4 (Budget, §3.4) exist precisely to prevent that kind of low-precision, "run everything that might apply" behavior.
@@ -185,8 +185,8 @@ Whichever condition applies is recorded as the plan's termination reason and sur
 
 | Situation | Engine Behavior |
 |---|---|
-| **No candidate matches the incident signature** (Stage 1 yields an empty set) | Select the generalist fallback wave: `anomaly_detection` (verify a real anomaly exists) and `alert_correlation` (check for a known cascading pattern), per [`ml_analyst_agent.md §7.5`](../agents/ml_analyst_agent.md#7-skill-selection-strategy). |
-| **Fallback wave also yields no actionable evidence** | Terminate with an empty selection, mark the incident `unclassified` in the plan rationale, and rely on the agent's forced-escalation rule ([`ml_analyst_agent.md §9.4`](../agents/ml_analyst_agent.md#9-confidence-estimation)) to route it to human review. |
+| **No candidate matches the incident signature** (Stage 1 yields an empty set) | If a generalist fallback skill is registered (none is, in the current minimal catalog), select it as a last-resort investigative wave. Otherwise, terminate immediately with an empty selection, mark the incident `unclassified` in the plan rationale, and rely on the agent's forced-escalation rule ([`ml_analyst_agent.md §9.4`](../agents/ml_analyst_agent.md#9-confidence-estimation)) to route it to human review, per [`ml_analyst_agent.md §7.5`](../agents/ml_analyst_agent.md#7-skill-selection-strategy). |
+| **Fallback wave (if one ran) yields no actionable evidence** | Terminate with an empty selection, mark the incident `unclassified` in the plan rationale, and rely on the agent's forced-escalation rule to route it to human review. |
 | **A matched skill's required input is unsatisfiable** (Stage 2 exclusion) | Exclude the skill with an explicit, documented reason; do not silently drop it from the rationale, and do not substitute a different skill in its place unless another candidate independently satisfies Stage 1–3. |
 | **The Skill Registry is empty or unreachable** | Treat as a hard platform fault, not an ordinary "no match" case: emit no plan and force immediate escalation, since no automated investigation is possible without the registry at all. |
 
@@ -257,9 +257,10 @@ graph TD
     Term -->|Budget/Marginal-cutoff/Fallback-exhausted| Terminal[Emit Terminal Wave:<br/>root_cause_prioritization, incident_summary]
     Term -->|Not yet, awaiting more evidence| Ledger
 
-    Sig -->|No candidates matched| Fallback[Fallback Wave:<br/>anomaly_detection, alert_correlation]
+    Sig -->|No candidates matched, no fallback skill registered| Unclassified[Terminate: Unclassified<br/>Force Escalation]
+    Sig -->|No candidates matched, fallback skill registered| Fallback[Fallback Wave:<br/>generalist skill, if any]
     Fallback --> Executor
-    Fallback -->|No actionable evidence returned| Unclassified[Terminate: Unclassified<br/>Force Escalation]
+    Fallback -->|No actionable evidence returned| Unclassified
 
     Terminal --> Done[Selection Engine Role Complete]
 ```
@@ -283,45 +284,34 @@ graph TD
 
 ### Incident
 
-Alert `ServingLatencyP99Spike` fires for `Recommendation_Ranking_Service`. Context Metadata shows a model deployment occurred 42 minutes before the latency onset, and no other alerts are currently active (no storm membership).
+Alert `DownstreamAccuracyDrop` fires for `Fraud_Detection_XGBoost`: F1-score has fallen from 0.92 to 0.78. No deployment has occurred in the affected window (continuing the scenario in [`ml_analyst_agent.md §14`](../agents/ml_analyst_agent.md#14-example-investigation)).
 
 ### Wave 0 — Signature Matching (Parallel)
 
-*   **Stage 1**: `alert_triggers` lookup for `ServingLatencyP99Spike` returns two candidates: `serving_analysis` and `latency_analysis`.
-*   **Stage 2**: both candidates' required inputs (service identity, metrics window) are satisfiable; both are in scope for a real-time serving endpoint.
+*   **Stage 1**: `alert_triggers` lookup for `DownstreamAccuracyDrop` returns two candidates: `data_drift_analysis` and `model_performance_analysis` — the platform's entire current catalog of investigative skills (see [`SYSTEM_SPEC.md §4`](SYSTEM_SPEC.md)).
+*   **Stage 2**: both candidates' required inputs (reference/current dataset paths, baseline metrics) are satisfiable; both are in scope for a batch fraud-detection model.
 *   **Stage 3**: both are equally specific to this alert type; no generalist competes at this stage.
 *   **Stage 4**: both fit within the wave budget.
-*   **Stage 5**: no dependency exists between them (they inspect different evidence domains — infra-level serving health vs. latency decomposition) → assigned to the same parallel wave.
-*   **Plan**: Wave 0 = `{serving_analysis, latency_analysis}`, parallel, `trigger_reason = signal_match` for both.
+*   **Stage 5**: no dependency exists between them (they inspect different evidence domains — input distribution vs. output performance) → assigned to the same parallel wave.
+*   **Plan**: Wave 0 = `{data_drift_analysis, model_performance_analysis}`, parallel, `trigger_reason = signal_match` for both.
 
 ### Wave 0 Findings
 
-*   `serving_analysis`: queue depth normal, no 5xx error spike, no CUDA OOM signals. Local confidence: 0.9 that infra-level resource exhaustion is *not* the cause.
-*   `latency_analysis`: P99 latency increase is concentrated entirely in the model-inference stage of the request lifecycle, not network or queueing stages. Local confidence: 0.88.
-
-### Wave 1 — Evidence-Triggered (Sequential)
-
-The engine is re-invoked. `deployment_regression`'s declared trigger condition — "select if latency/perf regression is confirmed and infra-level causes are ruled out, and a deployment occurred within the recent window" — now evaluates true against the updated ledger and the Context Metadata deployment timestamp. Session History confirms `deployment_regression` has not already run this session (§7). It passes Stage 2–4 and is assigned to its own sequential wave, since its selection was itself conditioned on Wave 0's findings.
-
-*   **Plan**: Wave 1 = `{deployment_regression}`, sequential, `trigger_reason = evidence_triggered`, citing the specific Wave 0 findings that satisfied its trigger condition.
-
-### Wave 1 Finding
-
-`deployment_regression`: confirms a new model version was deployed 42 minutes before onset; the deployed model is a larger ensemble than its predecessor, with no corresponding serving infrastructure scale-up recorded. Local confidence: 0.91.
+*   `model_performance_analysis`: F1 confirmed at 0.78 (baseline 0.92), regression is dataset-wide. Local confidence: 0.95.
+*   `data_drift_analysis`: `user_zipcode` null rate spiked from 0.02% to 18.5%; `transaction_amount` shows KS-test p < 0.0001, PSI = 0.32. Local confidence: 0.92.
 
 ### Termination
 
-The engine is re-invoked once more. No other registered skill's evidence-trigger condition evaluates true against the now-updated ledger: resource exhaustion has been actively ruled out (not merely unaddressed), no crash-loop symptoms exist, and no drift-related alert is present to justify `data_drift_analysis` or `concept_drift_analysis`. Per §6.3, this is a marginal-evidence cutoff — the engine emits `continuation_signal = terminate` with that reason, and selects the terminal wave.
+The engine is re-invoked for a possible Wave 1. With the current minimal catalog, there is no third investigative skill whose evidence-trigger condition could newly evaluate true — both registered investigative skills have already run this session (§7 redundancy rule), and no fallback skill is registered to consider (§8). Per §6.3, this is simultaneously a "no unresolved trigger conditions remain" and "fallback exhausted" termination — the engine emits `continuation_signal = terminate` with that reason, and selects the terminal wave. (Once a third investigative skill with a declared collaboration condition is added to the catalog — e.g., one that fires when a regression is confirmed but drift is absent — this same incident would instead proceed to a genuine Wave 1, per §6.2.)
 
 ### Terminal Wave
 
-`root_cause_prioritization` and `incident_summary` are selected as the final, terminal wave. The Selection Engine's involvement ends here; the resulting root cause ranking, confidence score, and recommendations are produced by the agent's downstream components as specified in [`ml_analyst_agent.md §3, §9, §14`](../agents/ml_analyst_agent.md).
+`root_cause_prioritization` and `incident_summary` are selected as the final, terminal wave. The Selection Engine's involvement ends here; the resulting root cause ranking, confidence score, and recommendations are produced by the agent's downstream components as specified in [`root_cause_analysis.md §8`](root_cause_analysis.md#8-end-to-end-example) and [`ml_analyst_agent.md §3, §9, §14`](../agents/ml_analyst_agent.md).
 
 ### Resulting `Selected Skills` Rationale (as published in the Incident Report)
 
-> Wave 0 (parallel, signal-matched): `serving_analysis`, `latency_analysis` — both directly triggered by `ServingLatencyP99Spike`.
-> Wave 1 (sequential, evidence-triggered): `deployment_regression` — selected because Wave 0 ruled out infra-level causes while confirming an inference-stage-specific regression, and a recent deployment fell within the incident's onset window.
-> Terminal wave: `root_cause_prioritization`, `incident_summary` — investigative waves exhausted; no further trigger conditions remained (marginal-evidence cutoff).
+> Wave 0 (parallel, signal-matched): `data_drift_analysis`, `model_performance_analysis` — both directly triggered by `DownstreamAccuracyDrop`.
+> Terminal wave: `root_cause_prioritization`, `incident_summary` — investigative waves exhausted; the current catalog has no further investigative skill to trigger.
 
 ---
 
