@@ -1,0 +1,24 @@
+[project]
+name = "ml-analyst-agent"
+version = "0.1.0"
+description = "Production-grade AI Agent Platform"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic>=2.0",
+    "python-dotenv",
+    "google-adk",
+    "redis",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "semgrep",
+]
