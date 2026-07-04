@@ -70,7 +70,25 @@ graph TD
 
 ### Key Component Responsibilities
 *   **ML Analyst Agent**: The orchestrator. Decides which skills to search, calls them, and merges outputs.
-*   **Dynamic Skill Registry**: Automatically indexes directories under `skills/` at startup, reading metadata and capabilities.
+*   **Dynamic Skill Registry**: Automatically indexes directories under `skills/` at startup, reading metadata and capabilities. Registered skills include:
+    1.  `task_state_monitoring` (Audits orchestrator DAG and task statuses)
+    2.  `dag_execution_analysis` (Measures historical runs and critical path durations)
+    3.  `latency_analysis` (Decomposes end-to-end latency percentiles)
+    4.  `resource_exhaustion` (Diagnoses CPU/Memory/GPU VRAM limits and OOMs)
+    5.  `crash_loop_analysis` (Troubleshoots container CrashLoopBackOff startup errors)
+    6.  `feature_pipeline_analysis` (Validates schema drift, nulls, and duplicate values)
+    7.  `data_drift_analysis` (Measures input feature distribution shifts using KS/PSI tests)
+    8.  `concept_drift_analysis` (Identifies shifts in the feature-to-label mapping P(Y|X))
+    9.  `prediction_distribution_analysis` (Tracks shifts in classification ratios and regression ranges)
+    10. `model_performance_analysis` (Tracks Accuracy/Precision/Recall/F1 against baselines)
+    11. `training_pipeline_analysis` (Audits retraining job logs, metrics, and loss curves)
+    12. `serving_analysis` (Monitors HTTP 5xx errors, cuda OOMs, and server queue depth)
+    13. `deployment_regression` (Correlates git deployment timestamps with failure start times)
+    14. `evaluation_analysis` (Checks pre-deployment offline test scorecards and bias slices)
+    15. `alert_correlation` (Groups cascading alert storm sequences topologically)
+    16. `root_cause_prioritization` (Ranks and prioritizes multiple candidate causes)
+    17. `anomaly_detection` (Flags time-series metric outliers violating confidence bands)
+    18. `incident_summary` (Compiles structured post-mortem markdown summaries)
 *   **Evidence Collector**: Structured interface to query mock or production environments (Airflow, logs, git, DB).
 *   **RCA & Prioritization Engine**: Uses deterministic heuristics and models to rank root causes.
 

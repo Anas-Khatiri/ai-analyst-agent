@@ -30,7 +30,7 @@ This document establishes the "paved roads" and standards for the `ml-analyst-ag
 
 ### 2.5 MCP Adoption Is Deferred to Phase 6/7, Not Phase 3-5
 *   MCP will serve as the eventual mechanism for decoupling agents from real infrastructure (Airflow, Postgres, Git). Do **not** stand up an MCP server against simulated data.
-*   Until Phase 6/7 wire in real infrastructure, keep the existing seam: agents call narrow, Pydantic-schema'd functions in `src/tools/*.py`, which call `src/mock_env/*.py`. Swapping the mock adapter for a direct SDK call or an `MCPToolset` client later should not require changing any agent, schema, or the orchestration graph.
+*   Until Phase 6/7 wire in real infrastructure, keep the existing seam: agents call narrow, Pydantic-schema'd functions in `shared/tools/*.py`, which call `services/mock_env/*.py`. Swapping the mock adapter for a direct SDK call or an `MCPToolset` client later should not require changing any agent, schema, or the orchestration graph.
 
 ---
 
@@ -68,3 +68,6 @@ A `FunctionTool` answers exactly one well-defined question. Do not bundle unrela
 
 ### 6.3 Deterministic Combination, Never LLM Judgment
 When a decision must combine the outputs of multiple tools — e.g., a retraining recommendation combining drift, aggregate performance, and segment findings — that combination is itself a deterministic Python function exposed as its own tool, never left to the model to derive by reasoning over raw numbers in context.
+
+### 6.4 Dynamic Skill-Script Loading and Sibling Imports
+Agent tools dynamically load Phase 2 skill scripts via `shared/skill_loader.py::load_skill_script`, which executes a script by file path (skill scripts are intentionally not an installable package — they must stay runnable standalone). If a skill script needs a sibling module, rely on the loader — it adds the script's own directory to `sys.path` before executing it. Do not add ad hoc `sys.path` manipulation inside individual skill scripts.
