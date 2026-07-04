@@ -3,7 +3,7 @@
 ## 1. Overview & Motivation (Why)
 
 ### Problem Statement
-In production Machine Learning operations (MLOps) and Site Reliability Engineering (SRE), incidents are complex, multi-dimensional, and rarely isolated. When an alert fires (e.g., accuracy degradation, out-of-memory error, API latency spike), SRE and MLOps teams are inundated with disconnected telemetry: raw logs, pipeline metadata, database queries, and data drift calculations. 
+In production Machine Learning operations (MLOps) and Site Reliability Engineering (SRE), incidents are complex, multi-dimensional, and rarely isolated. When an alert fires (e.g., accuracy degradation, out-of-memory error, API latency spike), SRE and MLOps teams are inundated with disconnected telemetry: raw logs, pipeline metadata, database queries, and data drift calculations.
 
 Traditional monitoring approaches rely on hardcoded, heuristic-based alerts. This leads to:
 1.  **Alert Fatigue**: Floods of redundant, context-barren alerts with high false-positive rates.
@@ -95,6 +95,8 @@ graph TD
 ---
 
 ## 5. Interface & Sequence Flow (How)
+
+> The sketch below is illustrative only. The authoritative, versioned field-by-field specification of `IncidentReport` — and of the Incident Signature and Raw Trigger objects that precede it — is [`incident_schema.md`](incident_schema.md), which governs in case of any discrepancy.
 
 ### Core Session Execution Interface
 ```python

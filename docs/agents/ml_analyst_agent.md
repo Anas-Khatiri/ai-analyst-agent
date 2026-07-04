@@ -3,8 +3,8 @@
 *   **Status**: Approved
 *   **Owner**: ML Platform Architect
 *   **Document Type**: Agent Behavioral Specification (implementation-independent)
-*   **Companion To**: [`skill_contract.md`](skill_contract.md)
-*   **Related Documents**: [`SYSTEM_SPEC.md`](../specifications/SYSTEM_SPEC.md), [`SYSTEM_ARCHITECTURE.md`](../architecture/SYSTEM_ARCHITECTURE.md), [`ADR_001_DYNAMIC_SKILL_ARCHITECTURE.md`](../decisions/ADR_001_DYNAMIC_SKILL_ARCHITECTURE.md), [`DYNAMIC_DISCOVERY_DESIGN.md`](../design/DYNAMIC_DISCOVERY_DESIGN.md)
+*   **Companion To**: [`skill_contract.md`](../specifications/skill_contract.md), [`skill_selection_engine.md`](../specifications/skill_selection_engine.md), [`root_cause_analysis.md`](../specifications/root_cause_analysis.md), [`evidence_model.md`](../specifications/evidence_model.md), [`incident_schema.md`](../specifications/incident_schema.md)
+*   **Related Documents**: [`SYSTEM_SPEC.md`](../specifications/SYSTEM_SPEC.md), [`SYSTEM_ARCHITECTURE.md`](../architecture/SYSTEM_ARCHITECTURE.md), [`ADR-001-dynamic-skills.md`](../decisions/ADR-001-dynamic-skills.md), [`ADR-002-mcp.md`](../decisions/ADR-002-mcp.md), [`ADR-003-confidence-scoring.md`](../decisions/ADR-003-confidence-scoring.md), [`DYNAMIC_DISCOVERY_DESIGN.md`](../design/DYNAMIC_DISCOVERY_DESIGN.md)
 
 This document is the single source of truth for the **behavior, responsibilities, interfaces, reasoning process, and interactions** of the ML Analyst Agent within Pipeline Sentinel. It defines *what the agent is and does*, not how it is coded. Implementations must conform to this specification; any behavioral change to the agent must first be reflected here.
 
@@ -139,6 +139,8 @@ All inputs are treated as **untrusted** by default: the agent assumes log/metada
 
 ## 5. Outputs
 
+> This section summarizes the `IncidentReport` shape at the agent level. The full, versioned field-by-field schema — including the Incident Signature and Raw Trigger objects that precede it in the lifecycle — is defined in [`incident_schema.md`](../specifications/incident_schema.md), which governs in case of any discrepancy.
+
 The agent's terminal output is a single structured `IncidentReport` object. Its shape is fixed regardless of which skills participated in the investigation, so downstream consumers (dashboards, ticketing, HITL queue) never need to special-case incident type.
 
 | Field | Description |
@@ -198,6 +200,8 @@ graph TD
 
 ## 7. Skill Selection Strategy
 
+> This section summarizes the selection strategy at the agent level. The full behavioral specification of the component that implements it — decision funnel, wave assembly, evidence-trigger evaluation, redundancy avoidance, and fallback rules — is defined in [`skill_selection_engine.md`](../specifications/skill_selection_engine.md), which governs in case of any discrepancy.
+
 The agent must run the *smallest sufficient* set of skills to reach a confident diagnosis — not the entire catalog. Skill selection is layered:
 
 ### 7.1 Signal-Based Routing (Primary)
@@ -210,7 +214,7 @@ Signal-based routing selects the *first wave* of skills only. As those skills re
 
 ### 7.3 Multi-Skill Investigations
 
-Most non-trivial incidents require more than one skill. The agent must be willing to run 2–5 skills per investigation when the evidence warrants it, but must stop adding skills once additional runs are unlikely to change the ranked hypothesis set (marginal-evidence cutoff) — running every skill "just in case" defeats the token-efficiency and hallucination-prevention goals of the dynamic registry (see [`ADR_001`](../decisions/ADR_001_DYNAMIC_SKILL_ARCHITECTURE.md)).
+Most non-trivial incidents require more than one skill. The agent must be willing to run 2–5 skills per investigation when the evidence warrants it, but must stop adding skills once additional runs are unlikely to change the ranked hypothesis set (marginal-evidence cutoff) — running every skill "just in case" defeats the token-efficiency and hallucination-prevention goals of the dynamic registry (see [`ADR-001`](../decisions/ADR-001-dynamic-skills.md)).
 
 ### 7.4 Sequential vs. Parallel Execution
 
@@ -226,6 +230,8 @@ If the incident's alert type matches no skill's `alert_triggers`, the agent does
 
 ## 8. Reasoning Strategy
 
+> This section summarizes the reasoning constraints at the agent level. The full specification of hypothesis generation, the deterministic ranking function, and rejection/tie-breaking rules is defined in [`root_cause_analysis.md`](../specifications/root_cause_analysis.md), which governs in case of any discrepancy.
+
 The agent's reasoning process is deliberately constrained to prevent premature or unsupported conclusions. These constraints are non-negotiable behavioral requirements, not stylistic preferences:
 
 1.  **Never jump to conclusions.** The agent may not emit a root cause that was not first proposed by a skill's `possible_root_causes` output backed by cited evidence.
@@ -239,6 +245,8 @@ The agent's reasoning process is deliberately constrained to prevent premature o
 ---
 
 ## 9. Confidence Estimation
+
+> The decision to compute confidence this way — rather than via LLM self-rating or a learned model — is recorded, with alternatives considered and rejected, in [`ADR-003-confidence-scoring.md`](../decisions/ADR-003-confidence-scoring.md). This section remains the authoritative specification of the computation itself.
 
 ### 9.1 How Confidence Is Calculated
 
@@ -269,6 +277,8 @@ Escalation is also **forced** irrespective of the numeric score whenever: no ski
 ---
 
 ## 10. Collaboration With Skills
+
+> This section summarizes how findings are merged. The full specification of the Evidence Ledger — fingerprinting, deduplication, corroboration, and conflict detection across an entire investigation — is defined in [`evidence_model.md`](../specifications/evidence_model.md), which governs in case of any discrepancy.
 
 ### 10.1 Communication Contract
 
@@ -315,7 +325,7 @@ In all cases, the agent's guiding rule is: **degrade gracefully and say so expli
 
 ## 12. Extensibility
 
-The agent must remain byte-for-byte unchanged when a new skill is added to `skills/`. This is the core promise of the Dynamic Skill Architecture ([`ADR_001`](../decisions/ADR_001_DYNAMIC_SKILL_ARCHITECTURE.md)):
+The agent must remain byte-for-byte unchanged when a new skill is added to `skills/`. This is the core promise of the Dynamic Skill Architecture ([`ADR-001`](../decisions/ADR-001-dynamic-skills.md)):
 
 *   A new skill is a new directory under `skills/` with a `SKILL.md` (metadata + heuristics) and its execution script. Nothing in the agent's code, prompts, or configuration references skills by name.
 *   At registry refresh, the new skill's `alert_triggers` are automatically eligible for signal-based routing (§7.1) with no agent redeployment.

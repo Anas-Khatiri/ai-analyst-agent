@@ -1,4 +1,4 @@
-# Architectural Decision Record: ADR_001_DYNAMIC_SKILL_ARCHITECTURE
+# ADR-001: Dynamic Skill Architecture
 
 *   **Status**: Approved
 *   **Owner**: ML Platform Architect
