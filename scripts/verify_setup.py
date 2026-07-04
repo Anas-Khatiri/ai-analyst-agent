@@ -60,9 +60,7 @@ def verify_environment() -> bool:
             contents="Say 'System ready' if you can read this.",
         )
         if response and response.text:
-            print(
-                f"✅ Gemini API communication succeeded. Response: '{response.text.strip()}'"
-            )
+            print(f"✅ Gemini API communication succeeded. Response: '{response.text.strip()}'")
         else:
             print("❌ Gemini API returned an empty response.", file=sys.stderr)
             return False

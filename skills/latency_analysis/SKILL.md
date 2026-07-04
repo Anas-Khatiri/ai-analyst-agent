@@ -3,7 +3,7 @@
 ## 1. Overview (Why)
 
 ### Purpose & Motivation
-Machine Learning inference requests are often part of real-time user-facing flows (e.g., ad recommendations, fraud screening, search autocomplete). If model serving latency exceeds established SLAs (typically sub-100ms), it causes upstream timeouts, system degradation, or poor user experience. 
+Machine Learning inference requests are often part of real-time user-facing flows (e.g., ad recommendations, fraud screening, search autocomplete). If model serving latency exceeds established SLAs (typically sub-100ms), it causes upstream timeouts, system degradation, or poor user experience.
 
 This skill exists to systematically decompose and analyze request-response latency. It parses tracing data and component-level duration metrics to help the `ML Analyst Agent` isolate where latency is occurring (e.g. model execution bottlenecks, network overhead, feature store fetch delays, serialization/deserialization CPU costs) and recommend targeted fixes.
 

@@ -119,7 +119,7 @@ class DynamicSkillExecutor:
         spec = importlib.util.spec_from_file_location(meta.name, script_full_path)
         if spec is None or spec.loader is None:
             raise ImportError(f"Cannot load spec for {meta.name}")
-            
+
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 

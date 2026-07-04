@@ -1,0 +1,45 @@
+rules:
+  - id: no-raw-shell-execution
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Raw shell execution is forbidden in agent/skill runtime code
+      (.agents/CONTEXT.md §2.2). Use the typed wrapper functions in
+      shared/tools/*.py instead of shelling out directly.
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FUNC(...)
+          - pattern: os.system(...)
+          - pattern: os.popen(...)
+          - pattern: os.spawnl(...)
+          - pattern: os.spawnle(...)
+          - pattern: os.spawnlp(...)
+          - pattern: os.spawnlpe(...)
+          - pattern: os.spawnv(...)
+          - pattern: os.spawnve(...)
+          - pattern: os.spawnvp(...)
+          - pattern: os.spawnvpe(...)
+          - pattern: os.execl(...)
+          - pattern: os.execle(...)
+          - pattern: os.execlp(...)
+          - pattern: os.execlpe(...)
+          - pattern: os.execv(...)
+          - pattern: os.execve(...)
+          - pattern: os.execvp(...)
+          - pattern: os.execvpe(...)
+          - pattern: asyncio.create_subprocess_shell(...)
+          - pattern: asyncio.create_subprocess_exec(...)
+          - pattern: commands.$FUNC(...)
+          - pattern: pty.spawn(...)
+
+  - id: no-dynamic-code-execution
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Dynamic code execution (eval/exec) is forbidden in agent/skill
+      runtime code (.agents/CONTEXT.md §2.2) — it is an equivalent
+      escape hatch to raw shell execution.
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: exec(...)

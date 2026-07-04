@@ -7,7 +7,7 @@ This document establishes the "paved roads" and standards for the `ml-analyst-ag
 ## 1. Core Coding Standards
 *   **Strict Type Hinting**: Every function, method, and class must use Python type hints for all parameters and return types.
 *   **Clean Code (SOLID)**: Favor composition over inheritance. Keep modules narrow and specialized.
-*   **Static Analysis**: Code must pass Ruff linting and formatting check, and Mypy typing validation before committing.
+*   **Static Analysis**: Code must pass Ruff linting and formatting check, and Mypy typing validation before committing. These checks are mechanically enforced by the pre-commit hooks defined in `.pre-commit-config.yaml` — see §7.
 
 ---
 
@@ -20,13 +20,17 @@ This document establishes the "paved roads" and standards for the `ml-analyst-ag
 ### 2.2 No Raw Shell Execution
 *   Never use raw shell execution tools (like `run_command` or Python `subprocess`) in agent actions.
 *   All operations must use parameterized Python SDK functions or strictly typed wrappers (e.g., `restart_dag(dag_id: str)` instead of `sh "airflow dags trigger <id>"`).
+*   This is enforced mechanically, not just by convention: the `semgrep-no-raw-shell-exec` pre-commit hook (`hooks/semgrep/no_raw_shell_exec.yaml`) blocks any commit touching `agents/`, `api/`, `services/`, `shared/`, or `skills/` that introduces `subprocess`, `os.system`/`os.popen`/`os.spawn*`/`os.exec*`, `asyncio.create_subprocess_*`, or raw `eval`/`exec`.
 
 ### 2.3 PII and Secret Isolation
 *   Sensitive employee or user data (SSNs, credit cards, emails) must be deterministic-masked using the PII Scrubbing Utility before logs or strings reach the LLM.
 *   API keys, passwords, and tokens must never be logged or embedded in traces.
+*   The `detect-secrets` pre-commit hook scans every commit against `.secrets.baseline`. A new, real finding must never be added to the baseline to silence it — only known false positives (e.g., documentation placeholders) may be baselined, via `uv run --with detect-secrets detect-secrets scan --baseline .secrets.baseline` followed by manual audit (`detect-secrets audit .secrets.baseline`).
 
 ### 2.4 Pre-Commit Remediation Loop
-*   If a Git commit fails due to a pre-commit hook violation (e.g., Ruff check error, Semgrep finding), you must treat the violation as a refactoring task, apply targeted fixes, run tests to verify no regressions, and attempt to commit again.
+*   If a Git commit fails due to a pre-commit hook violation (e.g., Ruff check error, Mypy error, Semgrep finding, detect-secrets finding), you must treat the violation as a refactoring task, apply targeted fixes, run tests to verify no regressions, and attempt to commit again.
+*   Never bypass a failing hook with `git commit --no-verify` to "unblock" a commit — a hook failure is the system working as intended. The one exception is a hook that auto-fixes and re-stages files (e.g., `ruff format`, `trailing-whitespace`); re-run `git add` on the modified files and commit again.
+*   See §7 for the full list of configured hooks.
 
 ### 2.5 MCP Adoption Is Deferred to Phase 6/7, Not Phase 3-5
 *   MCP will serve as the eventual mechanism for decoupling agents from real infrastructure (Airflow, Postgres, Git). Do **not** stand up an MCP server against simulated data.
@@ -71,3 +75,34 @@ When a decision must combine the outputs of multiple tools — e.g., a retrainin
 
 ### 6.4 Dynamic Skill-Script Loading and Sibling Imports
 Agent tools dynamically load Phase 2 skill scripts via `shared/skill_loader.py::load_skill_script`, which executes a script by file path (skill scripts are intentionally not an installable package — they must stay runnable standalone). If a skill script needs a sibling module, rely on the loader — it adds the script's own directory to `sys.path` before executing it. Do not add ad hoc `sys.path` manipulation inside individual skill scripts.
+
+---
+
+## 7. Pre-Commit Hook Configuration
+
+The repository's git hooks are defined in `.pre-commit-config.yaml` at the repo root and are mandatory for every contributor and every agent making commits.
+
+### 7.1 Setup
+```bash
+make install   # uv sync --group dev && uv run pre-commit install
+# or, if dependencies are already installed:
+make hooks     # uv run pre-commit install && uv run pre-commit run --all-files
+```
+Once installed, the hooks run automatically on `git commit`; the `pytest` hook additionally runs on `git push` (`stages: [pre-push]`) since the full suite is slower than a lint pass.
+
+### 7.2 Enforced Hooks
+
+| Hook | Enforces | Standard |
+|---|---|---|
+| `trailing-whitespace`, `end-of-file-fixer`, `mixed-line-ending` | Consistent file hygiene | General cleanliness |
+| `check-yaml`, `check-toml`, `check-json` | Config files parse | Prevents broken configs from landing |
+| `check-added-large-files`, `check-merge-conflict`, `check-case-conflict` | Repo hygiene | Prevents accidental large binaries, unresolved conflicts |
+| `detect-private-key`, `detect-secrets` | No committed credentials | §2.3 PII and Secret Isolation |
+| `debug-statements` | No stray `pdb`/`breakpoint()` calls | General cleanliness |
+| `ruff-check` / `ruff-format` | Lint + formatting, run via `uv run` against the project's pinned Ruff version | §1 Static Analysis |
+| `mypy` | Strict type checking (`[tool.mypy] strict = true` in `pyproject.toml`) | §1 Strict Type Hinting |
+| `semgrep-no-raw-shell-exec` | No `subprocess`/`os.system`/`os.exec*`/`eval`/`exec` under `agents/`, `api/`, `services/`, `shared/`, `skills/` | §2.2 No Raw Shell Execution |
+| `pytest` (pre-push only) | Test suite passes before code reaches a shared branch | §4 Testing & Evaluation Rules |
+
+### 7.3 Extending the Hook Set
+New custom Semgrep rules live under `hooks/semgrep/*.yaml` as separate rule files, referenced individually by their own local hook entry in `.pre-commit-config.yaml` — do not merge unrelated rules into `no_raw_shell_exec.yaml`, so each rule file's blast radius and false-positive risk stays independently reviewable.

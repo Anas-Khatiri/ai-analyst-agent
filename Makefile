@@ -1,8 +1,14 @@
-.PHONY: install run test lint format clean
+.PHONY: install hooks run test lint format security clean
 
-# Standard install using uv package manager
+# Standard install using uv package manager, plus git hook activation
 install:
 	uv sync --group dev
+	uv run pre-commit install
+
+# (Re-)install/update the pre-commit git hooks without a full dependency sync
+hooks:
+	uv run pre-commit install
+	uv run pre-commit run --all-files
 
 # Runs the FastAPI backend service
 run:
@@ -20,6 +26,10 @@ lint:
 # Runs Ruff formatting
 format:
 	uv run ruff format .
+
+# Runs the Semgrep security ruleset (no raw shell execution / no eval-exec)
+security:
+	uv run semgrep scan --config hooks/semgrep/no_raw_shell_exec.yaml
 
 # Clean cache directories
 clean:

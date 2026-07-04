@@ -22,3 +22,30 @@ dev = [
     "pre-commit",
     "semgrep",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "skills/*/scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "ANN", "RUF"]
+ignore = [
+    "ANN401", # Any is occasionally the correct type for dynamic skill I/O
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"] # test functions do not need return-type annotations
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["^\\.venv/", "^skills/.*/scripts/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"

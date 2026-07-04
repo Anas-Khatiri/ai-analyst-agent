@@ -1,0 +1,90 @@
+# Pre-commit configuration for ml-analyst-agent (Pipeline Sentinel).
+#
+# Enforces the standards in .agents/CONTEXT.md before any commit lands:
+#   - Ruff lint + format, Mypy typing            (§1 Core Coding Standards)
+#   - No raw shell execution / no eval-exec       (§2.2, custom Semgrep rule)
+#   - Secret/credential scanning                  (§2.3 PII and Secret Isolation)
+#
+# Setup:   uv run pre-commit install
+# Run all: uv run pre-commit run --all-files
+#
+# The linked tools (ruff, mypy, semgrep) run via `uv run` against this
+# project's own dev dependencies (pyproject.toml), so the version enforced
+# here always matches the version every contributor already has installed
+# via `uv sync --group dev` — never a separately pinned copy.
+
+default_language_version:
+  python: python3.11
+
+repos:
+  # --- Generic file hygiene -------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: debug-statements
+
+  # --- Secret / credential scanning -----------------------------------------
+  # Enforces .agents/CONTEXT.md §2.3: API keys, passwords, and tokens must
+  # never be committed. New findings must be triaged with:
+  #   uv run --with detect-secrets detect-secrets scan --baseline .secrets.baseline
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^uv\.lock$
+
+  # --- Python lint, format, and typing (project-managed via uv) -------------
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (lint, with autofix)
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: mypy
+        name: mypy (strict typing)
+        entry: uv run mypy .
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
+
+      # --- Security: no raw shell execution / no eval-exec ------------------
+      # Enforces .agents/CONTEXT.md §2.2. Scoped to the runtime code paths
+      # where agent/skill logic lives — see hooks/semgrep/no_raw_shell_exec.yaml.
+      - id: semgrep-no-raw-shell-exec
+        name: semgrep (no raw shell execution)
+        entry: uv run semgrep scan --quiet --error --config hooks/semgrep/no_raw_shell_exec.yaml
+        language: system
+        pass_filenames: false
+        files: ^(agents|api|services|shared|skills)/.*\.py$
+
+      - id: pytest
+        name: pytest
+        entry: hooks/run_pytest.sh
+        language: system
+        pass_filenames: false
+        types: [python]
+        stages: [pre-push]
