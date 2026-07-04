@@ -95,7 +95,7 @@ An investigation frequently produces more than one credible hypothesis — a pri
 
 ### 4.2 Tie-Breaking
 
-When two hypotheses' scores fall within a configured negligible margin of each other, both are published as co-ranked, and this near-tie is itself surfaced (per [`ADR-003-confidence-scoring.md §3.1`](../decisions/ADR-003-confidence-scoring.md)) as a reason for reduced overall confidence — the Ranking Function does not arbitrarily break a genuine tie to produce an artificially decisive answer.
+When two hypotheses' scores fall within a configured negligible margin of each other, both are published as co-ranked — the Ranking Function does not arbitrarily break a genuine tie to produce an artificially decisive answer. Whether that near-tie *reduces confidence* depends on why the two hypotheses are still separate: hypothesis merging (§2.3) already combines anything sharing a resolved evidence fingerprint, so two hypotheses that remain distinct are, by construction, about *different* evidence — several such hypotheses scoring similarly is multiple well-supported findings (§4.1), not ambiguity. A near-tie is only surfaced (per [`ADR-003-confidence-scoring.md §3.1`](../decisions/ADR-003-confidence-scoring.md)) as a reason for reduced confidence when the co-ranked hypotheses actually contradict each other — i.e., at least one carries `conflicting_evidence` against the other — since that is the case where the investigation genuinely cannot tell which of two competing explanations is correct.
 
 ### 4.3 The Noise Floor
 

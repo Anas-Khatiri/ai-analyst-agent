@@ -160,13 +160,32 @@ def test_compute_ranking_confidence_high_with_clear_margin() -> None:
     assert score >= 0.8
 
 
-def test_compute_ranking_confidence_low_on_near_tie() -> None:
+def test_compute_ranking_confidence_low_on_near_tie_between_conflicting_hypotheses() -> None:
     ranked = [
-        core.MergedHypothesis(cause="a", contributing_skills=["s"], score=0.82),
+        core.MergedHypothesis(
+            cause="a",
+            contributing_skills=["s"],
+            score=0.82,
+            conflicting_evidence=[core.EvidenceRef(skill_name="s", evidence_id="counter_evidence")],
+        ),
         core.MergedHypothesis(cause="b", contributing_skills=["s"], score=0.80),
     ]
     _, band = core.compute_ranking_confidence(ranked)
     assert band == "low"
+
+
+def test_compute_ranking_confidence_high_for_multiple_non_conflicting_hypotheses() -> None:
+    """Several distinct, non-contradicting hypotheses scoring similarly is not an
+    unresolved tie — merge_hypotheses already merged anything sharing evidence, so
+    separate entries are inherently about different findings (root_cause_analysis.md §4.1)."""
+    ranked = [
+        core.MergedHypothesis(cause="a", contributing_skills=["s1"], score=0.92),
+        core.MergedHypothesis(cause="b", contributing_skills=["s2"], score=0.92),
+        core.MergedHypothesis(cause="c", contributing_skills=["s2"], score=0.92),
+    ]
+    score, band = core.compute_ranking_confidence(ranked)
+    assert band == "high"
+    assert score >= 0.8
 
 
 def test_root_cause_prioritization_input_rejects_unknown_fields() -> None:

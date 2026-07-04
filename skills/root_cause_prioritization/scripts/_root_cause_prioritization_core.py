@@ -160,18 +160,37 @@ def rank_hypotheses(hypotheses: list[MergedHypothesis]) -> tuple[list[MergedHypo
     return published, dropped
 
 
+def _score_band(score: float) -> tuple[float, ConfidenceBand]:
+    if score >= HIGH_SCORE_THRESHOLD:
+        return 0.92, "high"
+    if score >= MEDIUM_SCORE_THRESHOLD:
+        return 0.65, "medium"
+    return 0.3, "low"
+
+
 def compute_ranking_confidence(ranked: list[MergedHypothesis]) -> tuple[float, ConfidenceBand]:
+    """Derives this skill's own confidence in the ranking it just produced.
+
+    A close score margin between two hypotheses is only genuine ambiguity —
+    and thus confidence-reducing — when those hypotheses actually contradict
+    each other (non-empty conflicting_evidence). Two hypotheses that remain
+    separate after merge_hypotheses are, by construction, about *different*
+    evidence (shared evidence would have merged them): several such
+    hypotheses scoring similarly is multiple well-supported findings, per
+    root_cause_analysis.md §4.1 ("Multiple Surviving Hypotheses Are Normal"),
+    not an unresolved tie.
+    """
     if not ranked:
         return 0.3, "low"
 
-    top_score = ranked[0].score
     if len(ranked) == 1:
-        if top_score >= HIGH_SCORE_THRESHOLD:
-            return 0.92, "high"
-        if top_score >= MEDIUM_SCORE_THRESHOLD:
-            return 0.65, "medium"
-        return 0.3, "low"
+        return _score_band(ranked[0].score)
 
+    has_unresolved_conflict = any(h.conflicting_evidence for h in ranked)
+    if not has_unresolved_conflict:
+        return _score_band(ranked[0].score)
+
+    top_score = ranked[0].score
     margin = ranked[0].score - ranked[1].score
     if margin >= HIGH_MARGIN_THRESHOLD and top_score >= HIGH_SCORE_THRESHOLD:
         return 0.92, "high"
