@@ -79,7 +79,7 @@ graph TD
     6.  `feature_pipeline_analysis` (Validates schema drift, nulls, and duplicate values)
     7.  `data_drift_analysis` (Measures input feature distribution shifts using KS/PSI tests)
     8.  `concept_drift_analysis` (Identifies shifts in the feature-to-label mapping P(Y|X))
-    9.  `prediction_distribution_analysis` (Tracks shifts in classification ratios and regression ranges)
+    9.  `safety_metric_distribution_analysis` (Measures rolling distributions of Recall, Precision, FPR, and FNR)
     10. `model_performance_analysis` (Tracks Accuracy/Precision/Recall/F1 against baselines)
     11. `training_pipeline_analysis` (Audits retraining job logs, metrics, and loss curves)
     12. `serving_analysis` (Monitors HTTP 5xx errors, cuda OOMs, and server queue depth)
