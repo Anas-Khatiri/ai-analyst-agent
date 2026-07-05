@@ -9,7 +9,7 @@ from structlog.processors import JSONRenderer, TimeStamper
 def configure_logging() -> None:
     """Configure structlog to emit JSON logs to stdout.
 
-    This function is intended to be called once at application start‑up.
+    This function is intended to be called once at application start-up.
     It sets a global logger configuration that other modules can obtain via
     ``structlog.get_logger()``.
     """
