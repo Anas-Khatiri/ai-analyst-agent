@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from evaluation.runners.eval_runner import EvalResult
 
-# Import the EvalResult type from the runner (to avoid circular imports, we import lazily in generate_report)
+# EvalResult is imported lazily in generate_report to avoid circular imports
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang='en'>
@@ -41,9 +41,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 def _format_details(details: dict[str, Any]) -> str:
-    """Pretty‑print details as HTML.
+    """Pretty-print details as HTML.
 
-    Simple implementation: JSON‑encode and replace new‑lines with <br>.
+    Simple implementation: JSON-encode and replace new-lines with <br>.
     """
     return json.dumps(details, indent=2).replace("\n", "<br>").replace(" ", "&nbsp;")
 
@@ -54,7 +54,7 @@ def generate_report(results: list[EvalResult], output_path: Path) -> None:
     The function writes ``output_path`` (an ``.html`` file) and also a JSON
     representation ``output_path.with_suffix('.json')`` for downstream tooling.
 
-    ``EvalResult`` is defined in ``evaluation.runners.eval_runner`` – we import it
+    ``EvalResult`` is defined in ``evaluation.runners.eval_runner`` - we import it
     lazily to avoid circular imports.
     """
     # Lazy import to sidestep circular dependency
@@ -67,8 +67,10 @@ def generate_report(results: list[EvalResult], output_path: Path) -> None:
     rows = []
     for idx, res in enumerate(results, start=1):
         status_cls = "pass" if res.passed else "fail"
+        status_label = "PASS" if res.passed else "FAIL"
         rows.append(
-            f"      <tr class='{status_cls}'><td>{idx}</td><td>{res.latency:.2f}</td><td>{'PASS' if res.passed else 'FAIL'}</td><td>{_format_details(res.details)}</td></tr>"
+            f"      <tr class='{status_cls}'><td>{idx}</td><td>{res.latency:.2f}</td>"
+            f"<td>{status_label}</td><td>{_format_details(res.details)}</td></tr>"
         )
     rows_str = "\n".join(rows)
 

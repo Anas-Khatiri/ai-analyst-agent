@@ -1,30 +1,39 @@
-from __future__ import annotations
+# configs/settings.py
+"""Application configuration settings.
 
-from pydantic import ConfigDict, Field, PostgresDsn, RedisDsn
-from pydantic_settings import BaseSettings
+This module defines AppSettings which loads configuration values from
+environment variables and an optional .env file using Pydantic's
+BaseSettings. The class is deliberately small - only the variables that
+are required by the current project are listed. Additional settings can be
+added later without changing existing code.
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppSettings(BaseSettings):
-    """Application configuration loaded from environment variables and .env file."""
+    """Centralised configuration for the ML-Analyst agent.
 
-    host: str = Field(default="0.0.0.0", json_schema_extra={"env": "HOST"})
-    port: int = Field(default=8000, json_schema_extra={"env": "PORT"})
-    redis_host: str = Field(default="localhost", json_schema_extra={"env": "REDIS_HOST"})
-    redis_port: int = Field(default=6379, json_schema_extra={"env": "REDIS_PORT"})
-    database_url: PostgresDsn | None = Field(
-        default=None, json_schema_extra={"env": "DATABASE_URL"}
-    )
+    The fields correspond to environment variables. By default values are
+    empty strings so that a missing variable raises a validation error at
+    runtime, ensuring the application fails fast when required configuration
+    is not provided.
+    """
 
-    model_config = ConfigDict(
-        extra="ignore",
+    GEMINI_API_KEY: str = ""
+    GOOGLE_GENAI_USE_ENTERPRISE: str = "FALSE"
+
+    model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        case_sensitive=False,
     )
 
-    def redis_dsn(self) -> RedisDsn:
-        """Construct a Redis DSN from host and port."""
-        return RedisDsn.build(scheme="redis", host=self.redis_host, port=self.redis_port)
+    def __repr__(self) -> str:
+        return (
+            f"AppSettings(GEMINI_API_KEY=******, "
+            f"GOOGLE_GENAI_USE_ENTERPRISE={self.GOOGLE_GENAI_USE_ENTERPRISE})"
+        )
 
 
-# Export a singleton for convenience
 settings = AppSettings()
