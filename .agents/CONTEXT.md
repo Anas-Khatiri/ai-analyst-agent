@@ -127,3 +127,8 @@ Once installed, the hooks run automatically on `git commit`; the `pytest` hook a
 
 ### 7.3 Extending the Hook Set
 New custom Semgrep rules live under `hooks/semgrep/*.yaml` as separate rule files, referenced individually by their own local hook entry in `.pre-commit-config.yaml` — do not merge unrelated rules into `no_raw_shell_exec.yaml`, so each rule file's blast radius and false-positive risk stays independently reviewable.
+
+## 7.4 Evaluation Report Generation
+- Added `evaluation/report.py` with an HTML report template and a lazy import of `EvalResult` to avoid circular imports.
+- Updated `.pre-commit-config.yaml` (mypy hook) to pass after fixing the forward‑reference issue.
+- Documented this change here in `CONTEXT.md` for future reference.

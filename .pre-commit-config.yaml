@@ -90,7 +90,7 @@ repos:
         stages: [pre-push]
       - id: pytest-commit
         name: pytest (commit)
-        entry: uv run pytest -q
+        entry: env -u GEMINI_API_KEY uv run pytest -q
         language: system
         types: [python]
         stages: [commit]
