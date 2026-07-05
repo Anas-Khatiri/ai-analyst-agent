@@ -1,3 +1,20 @@
+---
+name: incident_summary
+description: Compiles the final Markdown post-mortem report from the ranked root cause and all upstream Findings.
+required_inputs:
+  incident_id: str
+  alert_type: str
+  affected_system: str
+  detected_at: datetime
+  findings: dict[str, Finding]
+script_path: scripts/run_incident_summary.py
+version: "1.0.0"
+scope_boundary: Report compilation only; never raw diagnostics, statistics, or new root-cause reasoning.
+role: terminal_reporting
+terminal_order: 2
+alert_triggers: []
+---
+
 # Incident Summary Skill
 
 ## 1. Overview (Why)

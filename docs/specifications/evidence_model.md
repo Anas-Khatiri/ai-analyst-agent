@@ -49,13 +49,14 @@ A `LedgerEntry` wraps a single `EvidenceItem` (as defined in [`skill_contract.md
 
 | Field | Type | Description |
 |---|---|---|
+| `entry_id` | `str` | A unique identifier for this specific entry (e.g. `"<source_skill>#<wave>#<index>"`). Needed because a bare fingerprint cannot disambiguate *which* entry among possibly several sharing it — `corroborates`/`conflicts_with` reference entries by this field, not by fingerprint. |
 | `fingerprint` | `str` | The deterministic fingerprint computed per §3 — the primary key for deduplication and corroboration matching. |
 | `evidence_item` | `EvidenceItem` | The original evidence as emitted by the skill (subject, metric, value, baseline, time_window). |
 | `source_skill` | `str` | Which skill produced this entry. |
 | `source_wave` | `int` | Which investigation wave produced this entry. |
 | `recorded_at` | `datetime` | When the Evidence Aggregator wrote this entry. |
-| `corroborates` | `list[str]` | Fingerprints of other entries this one independently corroborates (§5.1). |
-| `conflicts_with` | `list[str]` | Fingerprints of other entries this one contradicts (§5.2). |
+| `corroborates` | `list[str]` | `entry_id`s of other entries this one independently corroborates (§5.1). |
+| `conflicts_with` | `list[str]` | `entry_id`s of other entries this one contradicts (§5.2). |
 
 ### 2.4 Append-Only Lifecycle
 
@@ -99,7 +100,7 @@ Per [`skill_contract.md §5.1`](skill_contract.md), a skill must never emit an `
 
 ### 5.1 Corroboration
 
-Two `LedgerEntry` records with the same fingerprint but different `source_skill` are marked as mutually corroborating: each entry's `corroborates` list includes the other's fingerprint-entry reference. Corroboration is a structural fact (same fingerprint, independent source) — it is computed by the Evidence Aggregator mechanically, never inferred by an LLM reading both entries.
+Two `LedgerEntry` records with the same fingerprint but different `source_skill` are marked as mutually corroborating: each entry's `corroborates` list includes the other's `entry_id`. Corroboration is a structural fact (same fingerprint, independent source) — it is computed by the Evidence Aggregator mechanically, never inferred by an LLM reading both entries.
 
 ### 5.2 Conflict
 

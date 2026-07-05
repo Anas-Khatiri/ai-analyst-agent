@@ -105,8 +105,8 @@ The Incident Report is the terminal, published artifact of an investigation — 
 | `incident_summary` | `str` | Yes | Plain-language description of what was observed, when, and on which system. |
 | `observed_symptoms` | `list[str]` | Yes | The normalized signal(s) that triggered the investigation. |
 | `selected_skills` | `list[SkillSelectionRecord]` | Yes | Every skill considered, selected, or excluded, with rationale — the published form of the Skill Selection Engine's plan (§3.6 of [`skill_selection_engine.md`](skill_selection_engine.md)). |
-| `findings` | `list[Finding]` | Yes | Per-skill structured findings, preserved individually — see [`skill_contract.md §5`](skill_contract.md) for the `Finding` shape. |
-| `root_cause_ranking` | `list[RankedCause]` | Yes | Ordered candidate root causes — see [`root_cause_analysis.md`](root_cause_analysis.md) for how this is produced. |
+| `findings` | `dict[str, Finding]` | Yes | Per-skill structured findings, keyed by skill name and preserved individually — see [`skill_contract.md §5`](skill_contract.md) for the `Finding` shape. Keyed by skill name (not a bare list) since every consumer of this field needs to know which skill produced which finding. |
+| `root_cause_ranking` | `list[HypothesisCandidate]` | Yes | The ranked candidate root causes exactly as `root_cause_prioritization` produced them (per [`skill_contract.md §5.2`](skill_contract.md)) — reused directly rather than an equivalent parallel type, since ranking already happens in that shape (see [`root_cause_analysis.md`](root_cause_analysis.md)). |
 | `confidence_score` | `float [0.0, 1.0]` | Yes | Overall investigation confidence — see [`ADR-003-confidence-scoring.md`](../decisions/ADR-003-confidence-scoring.md). |
 | `partial_investigation` | `bool` | Yes | `true` if any selected skill was unavailable or timed out (per [`ml_analyst_agent.md §11`](../agents/ml_analyst_agent.md#11-error-handling)). |
 | `requires_human_review` | `bool` | Yes | Set whenever confidence is Low, hypotheses are tied, or a fallback path was exhausted with no actionable evidence. |

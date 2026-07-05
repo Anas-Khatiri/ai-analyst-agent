@@ -1,3 +1,22 @@
+---
+name: data_drift_analysis
+description: Analyzes statistical drift in inference datasets (KS-test, PSI, null-rate spikes).
+required_inputs:
+  reference_dataset_id: str
+  current_dataset_id: str
+  numerical_features: list[str]
+  categorical_features: list[str]
+script_path: scripts/run_data_drift_analysis.py
+version: "1.0.0"
+scope_boundary: Statistical evaluation of input feature distributions only; never model output quality.
+role: investigative
+alert_triggers:
+  - DownstreamAccuracyDrop
+  - PredictionDistributionShift
+  - FeatureValueOutOfRange
+  - UpstreamSchemaChange
+---
+
 # Data Drift Analysis Skill
 
 ## 1. Overview (Why)

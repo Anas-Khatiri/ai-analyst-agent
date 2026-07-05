@@ -1,3 +1,16 @@
+---
+name: root_cause_prioritization
+description: Deterministically merges and ranks candidate root causes across all executed investigative skills' Findings.
+required_inputs:
+  findings: dict[str, Finding]
+script_path: scripts/run_root_cause_prioritization.py
+version: "1.0.0"
+scope_boundary: Ranking and evidence-fingerprint merging only; never raw diagnostics or statistics.
+role: terminal_ranking
+terminal_order: 1
+alert_triggers: []
+---
+
 # Root Cause Prioritization Skill
 
 ## 1. Overview (Why)

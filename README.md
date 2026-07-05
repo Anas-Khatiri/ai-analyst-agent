@@ -7,11 +7,15 @@ An autonomous AI Agent platform designed to monitor production data pipelines, m
 ```
 ml-analyst-agent/
 ├── .agents/       # Project customizations and local guardrails (CONTEXT.md)
+├── agents/        # ML Analyst Agent orchestration: skill_selection_engine.py, ml_analyst_agent.py
+├── api/           # FastAPI application (not yet implemented)
 ├── docs/          # Project documentation (specifications, architecture, decisions)
 ├── eval/          # Evaluation datasets and scripts
 ├── hooks/         # Pre-commit and static validation hooks
-├── skills/        # Reusable skill sets (python scripts and skill specs)
-├── src/           # Application source code
+├── services/      # Infrastructure adapters, e.g. services/mock_env/*.py
+├── shared/        # Cross-cutting code: schemas/ (Finding, incident, evidence ledger contracts),
+│                  #   tools/ (typed wrappers), skill_registry.py, skill_loader.py
+├── skills/        # Skill specs (SKILL.md) plus each skill's scripts/ implementation
 ├── tests/         # Unit and integration tests
 ├── .venv/         # Isolated virtual environment
 ├── pyproject.toml # Dependency definitions

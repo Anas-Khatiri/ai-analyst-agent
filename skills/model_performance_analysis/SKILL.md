@@ -1,3 +1,20 @@
+---
+name: model_performance_analysis
+description: Compares production classification metrics against baseline, with bootstrap significance testing and cohort slicing.
+required_inputs:
+  predictions_dataset_id: str
+script_path: scripts/run_model_performance_analysis.py
+version: "1.0.0"
+scope_boundary: Prediction-label alignment and metric slicing only; never statistical input drift.
+role: investigative
+alert_triggers:
+  - DownstreamAccuracyDrop
+  - ModelAccuracyAlert
+  - BusinessKPIDrop
+  - SegmentQualityAnomaly
+  - ModelRetrainingAudit
+---
+
 # Model Performance Analysis Skill
 
 ## 1. Overview (Why)
@@ -47,6 +64,7 @@ This skill is selected by the `ML Analyst Agent` when incidents relate to model 
 
 | Alert Type | Symptom / Signal | Selection Relevance |
 | :--- | :--- | :--- |
+| `DownstreamAccuracyDrop` | Model precision or recall falls below acceptable operational thresholds. | Critical (Confirm and quantify the regression, run in parallel with `data_drift_analysis`). |
 | `ModelAccuracyAlert` | Continuous validation metrics fall below established thresholds. | Critical (Verify the drop across all metrics). |
 | `BusinessKPIDrop` | Downstream KPIs (e.g., user click-through rate, fraud loss) shift abruptly. | High (Correlate with model performance degradation). |
 | `SegmentQualityAnomaly` | Localized reports from specific customer tiers indicate system errors. | High (Slice performance by customer tier cohort). |

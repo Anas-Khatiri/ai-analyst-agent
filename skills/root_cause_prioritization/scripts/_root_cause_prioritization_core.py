@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from shared.schemas.evidence_ledger import fingerprint as compute_fingerprint
 from shared.schemas.finding import EvidenceItem, Finding
 
 ConfidenceBand = Literal["high", "medium", "low"]
@@ -54,14 +55,18 @@ class RankingResult(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
-def _fingerprint(item: EvidenceItem) -> str:
-    return f"{item.subject.strip().lower()}::{item.metric.strip().lower()}"
-
-
 def _resolve_fingerprints(
     evidence_ids: list[str], evidence_by_id: dict[str, EvidenceItem]
 ) -> list[str]:
-    return [_fingerprint(evidence_by_id[eid]) for eid in evidence_ids if eid in evidence_by_id]
+    """Resolves this hypothesis's supporting evidence to shared_model fingerprints.
+
+    Uses the single shared fingerprint implementation (shared/schemas/evidence_ledger.py)
+    rather than a private reimplementation, so merging here stays consistent with
+    the Evidence Ledger's own corroboration detection.
+    """
+    return [
+        compute_fingerprint(evidence_by_id[eid]) for eid in evidence_ids if eid in evidence_by_id
+    ]
 
 
 def collect_hypotheses(findings: dict[str, Finding]) -> list[MergedHypothesis]:

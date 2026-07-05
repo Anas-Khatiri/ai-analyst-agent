@@ -13,7 +13,7 @@
 
 Pipeline Sentinel's skills and agent tools need to reach real infrastructure eventually: Airflow, model-serving endpoints, Postgres, Git, cloud provider metric APIs. The Model Context Protocol (MCP) is an emerging open standard for connecting LLM-driven agents to external tools and data sources over a uniform, transport-agnostic RPC interface, and it is the platform's stated long-term integration mechanism (see [`ADR-001-dynamic-skills.md §5`](ADR-001-dynamic-skills.md)).
 
-Today (Phase 3–5), the platform has no production infrastructure to connect to — `agents/`, `api/`, `services/`, and `shared/` are still empty, and the eighteen skills are specifications, not running code. The question this ADR resolves: **do we build MCP servers now, against simulated data, or defer MCP entirely until real infrastructure exists?**
+Today (Phase 3–5), the platform has no production infrastructure to connect to — the four implemented skills (`data_drift_analysis`, `model_performance_analysis`, `root_cause_prioritization`, `incident_summary`) run entirely against the `shared/tools/*.py` → `services/mock_env/*.py` seam described below (see `shared/tools/dataset_access.py` and `shared/tools/prediction_access.py` for the two realized examples), not real systems. The question this ADR resolves: **do we build MCP servers now, against simulated data, or defer MCP entirely until real infrastructure exists?**
 
 ### Motivation
 

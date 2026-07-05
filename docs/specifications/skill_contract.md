@@ -75,8 +75,10 @@ Every `SKILL.md` must declare the following metadata, either as YAML frontmatter
 | `script_path` | `str` | Yes | Relative path to the executable entrypoint. |
 | `version` | `str` | Yes | Semantic version of this skill's contract surface (§10). |
 | `scope_boundary` | `str` | Yes | A one-paragraph statement of what this skill does **not** do, to prevent overlapping responsibility with adjacent skills (mirrors each existing `SKILL.md`'s "What This Skill MUST NOT Do" section). |
+| `role` | `"investigative" \| "terminal_ranking" \| "terminal_reporting"` | Yes | Lets the Skill Selection Engine identify the terminal wave generically — by role, never by hardcoding a skill's name (see [`skill_selection_engine.md §5.3`](skill_selection_engine.md#5-sequential-vs-parallel-execution)). Defaults to `investigative` if omitted. |
+| `terminal_order` | `int \| null` | Only for non-investigative roles | Sequences the terminal wave when more than one terminal skill is registered (e.g., a ranking skill before a reporting skill that consumes its output). Unused for `investigative` skills. |
 
-Beyond the machine-readable metadata, every `SKILL.md` must retain the narrative sections already established across the 18 existing skills — Overview, Responsibilities, Triggers, Required Inputs, Expected Evidence, Investigation Workflow, Root Cause Heuristics, Outputs, Confidence Scoring, Recommended Actions, Limitations, Collaboration, Example Investigation, Future Improvements — since these are what a human maintainer and the agent's designers use to audit the skill's reasoning. The metadata table above is a strict subset of that document, not a replacement for it.
+Beyond the machine-readable metadata, every `SKILL.md` must retain the narrative sections already established across the skill catalog — Overview, Responsibilities, Triggers, Required Inputs, Expected Evidence, Investigation Workflow, Root Cause Heuristics, Outputs, Confidence Scoring, Recommended Actions, Limitations, Collaboration, Example Investigation, Future Improvements — since these are what a human maintainer and the agent's designers use to audit the skill's reasoning. The metadata table above is a strict subset of that document, not a replacement for it.
 
 ---
 
@@ -114,7 +116,7 @@ Every skill returns a **Finding** — a single structured object with a fixed sh
 
 | Field | Type | Description |
 |---|---|---|
-| `investigation_summary` | `str` | Human-readable synopsis of what this skill found. Narrative only — never a source of evidence or ranking input. |
+| `investigation_summary` | `str` | Human-readable narrative of what this skill found. Narrative only — never a source of evidence or ranking input. For most skills this is a short synopsis; a terminal reporting skill (e.g. `incident_summary`) whose entire deliverable *is* a long-form document may use this field for the full compiled report, since the fixed `Finding` shape has no dedicated report field and forbids extras (§5.3). |
 | `evidence` | `list[EvidenceItem]` | Structured, individually-citable data points (§5.1). This is the skill's factual contribution to the shared ledger. |
 | `possible_root_causes` | `list[HypothesisCandidate]` | This skill's locally-scoped candidate explanations, each tied to specific `evidence` entries (§5.2). |
 | `confidence_score` | `float [0.0, 1.0]` | This skill's own local confidence, computed under its own deterministic matrix (§6) — not the overall investigation confidence. |
@@ -130,12 +132,13 @@ Every evidence entry must carry enough structure for the agent to fingerprint an
 
 | Field | Description |
 |---|---|
+| `evidence_id` | A skill-local identifier for this entry, unique within the emitting skill's own `Finding`. This is *not* the cross-skill fingerprint (subject+metric+time_window, per [`evidence_model.md §3`](evidence_model.md)) — it exists purely so `HypothesisCandidate.supporting_evidence`/`conflicting_evidence` (§5.2) and `ActionItem.justifying_finding_refs` can cite a specific entry within the same `Finding` without repeating its full content. |
 | `subject` | The concrete thing being measured (a feature name, a metric name, a log source, a task id). |
 | `metric` | The statistic computed (a KS p-value, a PSI score, an error rate, a restart count). |
 | `value` | The observed value. |
 | `baseline` | The reference/expected value, where applicable. |
 | `time_window` | The window this observation covers. |
-| `source_skill` | The emitting skill's `name`, filled automatically by the executor, not the skill itself. |
+| `source_skill` | The emitting skill's `name`. Until the Skill Executor (`shared/skill_loader.py`, per [`.agents/CONTEXT.md §6.4`](../../.agents/CONTEXT.md)) exists, a skill sets this field itself when constructing its `Finding`; once the executor lands, it should take over stamping this field so a skill can never misattribute its own output. |
 
 A skill must never emit evidence whose `subject` + `metric` + `time_window` is ambiguous enough to prevent correct fingerprinting — vague evidence weakens the agent's ability to recognize cross-skill corroboration (§8).
 
@@ -144,9 +147,11 @@ A skill must never emit evidence whose `subject` + `metric` + `time_window` is a
 | Field | Description |
 |---|---|
 | `cause` | A specific, falsifiable causal statement — not a vague category. ("Upstream pipeline null-injection on `user_zipcode`", not "data quality issue.") |
-| `supporting_evidence` | References to specific `evidence` entries from this Finding that support the cause. |
-| `conflicting_evidence` | References to specific `evidence` entries, if any, that argue against the cause — a skill must surface evidence against its own leading hypothesis, not just for it. |
+| `supporting_evidence` | References to specific `evidence` entries that support the cause, as bare `evidence_id` strings, for an investigative skill citing entries from *its own* `Finding`. |
+| `conflicting_evidence` | References to specific `evidence` entries, if any, that argue against the cause — a skill must surface evidence against its own leading hypothesis, not just for it. Same referencing convention as `supporting_evidence`. |
 | `local_confidence` | This skill's own confidence in this specific hypothesis, independent of `confidence_score` (which is the skill's confidence in its overall investigation). |
+
+**Cross-Finding citation (combination/terminal skills only)**: a skill like `root_cause_prioritization` that combines `HypothesisCandidate`s drawn from *multiple* upstream skills' Findings cannot use bare `evidence_id` strings unambiguously — two different skills may reuse the same local ID. Such a skill must qualify its own output's `supporting_evidence`/`conflicting_evidence` entries as `"<skill_name>::<evidence_id>"` instead, so any downstream consumer (e.g. `incident_summary`, resolving citations for the final report) can trace a reference back to the exact originating `Finding`. This qualification is only valid in a skill whose own inputs span multiple Findings — an investigative skill citing its own evidence must never qualify its refs, since it has nothing to disambiguate against.
 
 ### 5.3 What a Skill Must Never Do With Its Output
 
@@ -169,7 +174,7 @@ Each skill must define, in its own `SKILL.md`, a **deterministic confidence matr
 ## 7. Security & Isolation Contract
 
 *   **Input validation**: every skill's entrypoint parameters are validated by a Pydantic model with `extra = "forbid"` before any computation runs (§4.1); malformed input is rejected, never coerced or ignored.
-*   **PII isolation**: any raw log, metadata, or record content a skill reads must be passed through the platform's deterministic PII-masking utility before it is embedded in `investigation_summary`, `evidence`, or any other field the agent may later place in an LLM context. A skill must never mask PII with its own ad hoc logic — it must use the shared masking utility so masking behavior is uniform and auditable across all 18+ skills.
+*   **PII isolation**: any raw log, metadata, or record content a skill reads must be passed through the platform's deterministic PII-masking utility before it is embedded in `investigation_summary`, `evidence`, or any other field the agent may later place in an LLM context. A skill must never mask PII with its own ad hoc logic — it must use the shared masking utility so masking behavior is uniform and auditable across every skill in the catalog, however large it grows.
 *   **No secret leakage**: API keys, tokens, and credentials used by a skill to reach its data sources must never appear in `investigation_summary`, `evidence`, logs, or exceptions.
 *   **Prompt-injection awareness**: because a skill's `evidence` may originate from untrusted log/metadata content, a skill must not pass that content directly into any LLM-assisted step (§4.3) without the platform's injection-detection pass; suspected injection content is flagged in `limitations`, and the agent's force-escalation rule ([`ml_analyst_agent.md §9.4`](../agents/ml_analyst_agent.md#9-confidence-estimation)) handles the response.
 *   **No raw shell execution**: restated from §4.5 because it is enforced as a security boundary, not just a style rule — this is what prevents a compromised or buggy skill script from becoming a remote-code-execution surface.
