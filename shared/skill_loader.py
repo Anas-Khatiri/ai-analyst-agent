@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType
 
 from shared.schemas.finding import Finding
+from shared.security.exceptions import SecurityError
 from shared.skill_registry import SkillMetadata
 
 
@@ -48,7 +49,11 @@ async def execute_skill(
     agents/ml_analyst_agent.py) is responsible for catching a failure and
     marking that skill "unavailable" per ml_analyst_agent.md §11, rather
     than this loader silently swallowing or reinterpreting it.
+
     """
+    # Enforce allow-list: only allowed roles are permissible.
+    if meta.role not in {"investigative", "terminal_ranking", "terminal_reporting"}:
+        raise SecurityError(f"Tool '{meta.name}' is not allowed (role={meta.role}).")
     module = load_skill_script(script_path)
     run_func = getattr(module, "run", None)
     if run_func is None:

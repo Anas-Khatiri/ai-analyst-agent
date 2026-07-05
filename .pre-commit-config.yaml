@@ -88,3 +88,9 @@ repos:
         pass_filenames: false
         types: [python]
         stages: [pre-push]
+      - id: pytest-commit
+        name: pytest (commit)
+        entry: uv run pytest -q
+        language: system
+        types: [python]
+        stages: [commit]

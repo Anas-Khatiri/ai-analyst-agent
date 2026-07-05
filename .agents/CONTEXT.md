@@ -31,10 +31,14 @@ This document establishes the "paved roads" and standards for the `ml-analyst-ag
 *   If a Git commit fails due to a pre-commit hook violation (e.g., Ruff check error, Mypy error, Semgrep finding, detect-secrets finding), you must treat the violation as a refactoring task, apply targeted fixes, run tests to verify no regressions, and attempt to commit again.
 *   Never bypass a failing hook with `git commit --no-verify` to "unblock" a commit — a hook failure is the system working as intended. The one exception is a hook that auto-fixes and re-stages files (e.g., `ruff format`, `trailing-whitespace`); re-run `git add` on the modified files and commit again.
 *   See §7 for the full list of configured hooks.
+*   `git commit` will trigger the pre‑commit hooks; to also run the full pytest suite on commit, add a custom hook or run `uv run pytest -q` before committing.
 
 ### 2.5 MCP Adoption Is Deferred to Phase 6/7, Not Phase 3-5
 *   MCP will serve as the eventual mechanism for decoupling agents from real infrastructure (Airflow, Postgres, Git). Do **not** stand up an MCP server against simulated data.
 *   Until Phase 6/7 wire in real infrastructure, keep the existing seam: agents call narrow, Pydantic-schema'd functions in `shared/tools/*.py`, which call `services/mock_env/*.py`. Swapping the mock adapter for a direct SDK call or an `MCPToolset` client later should not require changing any agent, schema, or the orchestration graph.
+
+### 2.6 Security Documentation
+* Review the **SECURITY.md** file for the security package overview, extension guidelines, and CI integration.
 
 ---
 
@@ -104,7 +108,7 @@ The repository's git hooks are defined in `.pre-commit-config.yaml` at the repo 
 make install   # uv sync --group dev && uv run pre-commit install
 # or, if dependencies are already installed:
 make hooks     # uv run pre-commit install && uv run pre-commit run --all-files
-```
+```\n\n> **Dependency Management with uv**\n> All new Python dependencies must be added to the `pyproject.toml` `[project]` dependencies list (or appropriate dev group). Use `uv add <package>` to add a library, which updates `pyproject.toml` automatically, and run `uv sync` to install them locally. The CI pipeline also installs dependencies via `uv sync`.\n> When adding development‑only packages (e.g., testing or linting tools), add them to the appropriate dependency‑group in `pyproject.toml` and run `uv sync --group dev`.\n\n```
 Once installed, the hooks run automatically on `git commit`; the `pytest` hook additionally runs on `git push` (`stages: [pre-push]`) since the full suite is slower than a lint pass.
 
 ### 7.2 Enforced Hooks
