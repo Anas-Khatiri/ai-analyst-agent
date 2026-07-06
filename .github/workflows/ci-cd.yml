@@ -25,6 +25,7 @@ jobs:
   lint:
     name: Lint (ruff, mypy)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +50,7 @@ jobs:
   test:
     name: Test (pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -72,6 +74,7 @@ jobs:
     name: Build and push Docker image
     needs: [lint, test]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Only publish on an actual merge to main, never for an unreviewed PR.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:

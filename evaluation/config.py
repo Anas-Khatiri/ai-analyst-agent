@@ -14,4 +14,10 @@
 # end-to-end run in this repo's test suite.
 MAX_LATENCY_SECONDS = 20.0  # <= 20 seconds
 
+# Hard backstop against a genuinely hung call (stuck MCP subprocess, network
+# stall) -- distinct from MAX_LATENCY_SECONDS, which just flags "too slow but
+# it did finish." Generous on purpose so it never trips on a legitimately
+# slow-but-working case, only one that's truly stuck.
+CASE_TIMEOUT_SECONDS = 120.0
+
 EVALUATION_PASS_RATE_THRESHOLD = 0.98  # 98% of cases must pass every check below

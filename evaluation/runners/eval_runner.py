@@ -31,6 +31,7 @@ from typing import Any
 # Import the agent entrypoint
 from agents.react_agent import analyze_incident_react
 from evaluation.config import (
+    CASE_TIMEOUT_SECONDS,
     EVALUATION_PASS_RATE_THRESHOLD,
     MAX_LATENCY_SECONDS,
 )
@@ -57,20 +58,36 @@ async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
     1. Crash containment: an exception (Gemini/MCP failure, malformed
        payload) fails this one case with the error captured, instead of
        taking down the whole evaluation run for every other case too.
-    2. Latency budget.
-    3. Confidence/root-cause consistency: a report that doesn't require
+    2. Hang containment: a case that neither finishes nor raises within
+       CASE_TIMEOUT_SECONDS (a stuck MCP subprocess, a network stall) is
+       cancelled and recorded as a timeout, rather than blocking every
+       remaining case -- and the whole CI job -- indefinitely.
+    3. Latency budget.
+    4. Confidence/root-cause consistency: a report that doesn't require
        human review must actually point at a root cause -- "confidently
        empty" is a real bug class, not a valid outcome.
-    4. Terminal-wave completeness: root_cause_prioritization and
+    5. Terminal-wave completeness: root_cause_prioritization and
        incident_summary must both have run, since combination is required
        to stay deterministic regardless of selection mode (ADR-004 §3.3,
        ADR-006). A case that legitimately found nothing to investigate
-       (requires_human_review=True) is exempt from checks 3 and 4 -- see
+       (requires_human_review=True) is exempt from checks 4 and 5 -- see
        evaluation/datasets/example.jsonl's escalation-case sample.
     """
     start = time.time()
     try:
-        report = await analyze_incident_react(payload)
+        report = await asyncio.wait_for(
+            analyze_incident_react(payload), timeout=CASE_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        latency = time.time() - start
+        return EvalResult(
+            latency=latency,
+            passed=False,
+            details={
+                "latency": latency,
+                "crash": f"Case exceeded the {CASE_TIMEOUT_SECONDS}s hang-containment timeout",
+            },
+        )
     except Exception as exc:
         latency = time.time() - start
         return EvalResult(

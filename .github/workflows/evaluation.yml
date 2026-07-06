@@ -9,6 +9,10 @@ on:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
+    # Defense in depth on top of evaluate_one's own per-case
+    # CASE_TIMEOUT_SECONDS: caps the whole job well under GitHub's 360-minute
+    # default, so an unexpected hang can't silently eat the runner for hours.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
