@@ -159,7 +159,17 @@ def _record_tool_observation(
     """Client-side counterpart of the old in-closure session mutation: called
     once per MCP tool call, off that call's `function_response` payload."""
     if "error" in payload:
-        session.unavailable_skills[tool_name] = str(payload["error"])
+        error_message = str(payload["error"])
+        session.unavailable_skills[tool_name] = error_message
+        session.selection_records.append(
+            SkillSelectionRecord(
+                skill_name=tool_name,
+                trigger_reason="llm_selected",
+                wave_index=0,
+                excluded=True,
+                exclusion_reason=error_message,
+            )
+        )
         log_event(
             _LOGGER,
             logging.WARNING,
@@ -167,7 +177,7 @@ def _record_tool_observation(
             session.incident_id,
             "skill_unavailable",
             skill_name=tool_name,
-            error=str(payload["error"]),
+            error=error_message,
         )
         return
 

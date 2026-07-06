@@ -151,7 +151,7 @@ def test_render_report_markdown_contains_all_section_headers() -> None:
         remediation_actions="e",
         preventive_recommendations="f",
     )
-    report = core.render_report_markdown("INC-1", sections)
+    report = core.render_report_markdown("INC-1", sections, 0.92, "high")
 
     for header in (
         "# Incident Report: INC-1",

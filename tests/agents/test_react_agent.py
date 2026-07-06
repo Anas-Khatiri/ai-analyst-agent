@@ -114,6 +114,12 @@ def test_record_tool_observation_records_unavailable_on_error_payload() -> None:
 
     assert session.unavailable_skills["model_performance_analysis"] == "boom"
     assert "model_performance_analysis" not in session.findings
+    failed_record = next(
+        r for r in session.selection_records if r.skill_name == "model_performance_analysis"
+    )
+    assert failed_record.excluded is True
+    assert failed_record.exclusion_reason == "boom"
+    assert failed_record.trigger_reason == "llm_selected"
 
 
 @pytest.mark.skipif(not _has_real_api_key(), reason="requires a real GEMINI_API_KEY")

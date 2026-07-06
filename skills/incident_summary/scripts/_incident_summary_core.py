@@ -98,8 +98,8 @@ def build_executive_summary(root_cause_finding: Finding | None, incident_id: str
         )
     top = root_cause_finding.possible_root_causes[0]
     return (
-        f"Incident {incident_id} was most likely caused by: {top.cause} "
-        f"(confidence: {top.local_confidence:.2f})."
+        f"Incident {incident_id} was most likely caused by **{top.cause}** "
+        f"(confidence: {top.local_confidence:.0%})."
     )
 
 
@@ -114,18 +114,40 @@ def build_observed_symptoms(alert_type: str, affected_system: str, detected_at: 
 def build_root_cause_analysis(root_cause_finding: Finding | None) -> str:
     if root_cause_finding is None or not root_cause_finding.possible_root_causes:
         return ""
-    return "\n".join(
-        f"{index}. **{hypothesis.cause}** (confidence: {hypothesis.local_confidence:.2f})"
-        for index, hypothesis in enumerate(root_cause_finding.possible_root_causes, start=1)
+    lines = []
+    for index, hypothesis in enumerate(root_cause_finding.possible_root_causes, start=1):
+        confidence_pct = f"{hypothesis.local_confidence:.0%}"
+        lines.append(f"{index}. **{hypothesis.cause}** — confidence: {confidence_pct}")
+        if hypothesis.conflicting_evidence:
+            conflicting = ", ".join(hypothesis.conflicting_evidence)
+            lines.append(f"   - Conflicting evidence: {conflicting}")
+    return "\n".join(lines)
+
+
+def _format_delta(value: float, baseline: float | None) -> str:
+    if baseline is None:
+        return "—"
+    delta = value - baseline
+    arrow = "↑" if delta > 0 else "↓" if delta < 0 else "→"
+    return f"{arrow} {delta:+.4f}"
+
+
+def _format_row(item: EvidenceItem) -> str:
+    baseline_str = f"{item.baseline:.4f}" if item.baseline is not None else "n/a"
+    delta_str = _format_delta(item.value, item.baseline)
+    return (
+        f"| {item.source_skill} | {item.subject} | {item.metric} "
+        f"| {item.value:.4f} | {baseline_str} | {delta_str} |"
     )
 
 
 def build_evidence_citations_markdown(cited_evidence: list[EvidenceItem]) -> str:
-    lines = []
-    for item in cited_evidence:
-        baseline_str = f" (baseline: {item.baseline:.4f})" if item.baseline is not None else ""
-        lines.append(f"- **{item.subject}** — {item.metric} = {item.value:.4f}{baseline_str}")
-    return "\n".join(lines)
+    if not cited_evidence:
+        return ""
+    header = "| Skill | Subject | Metric | Observed | Baseline | Delta |\n"
+    separator = "|---|---|---|---|---|---|\n"
+    rows = "\n".join(_format_row(item) for item in cited_evidence)
+    return header + separator + rows
 
 
 def build_remediation_actions(root_cause_finding: Finding | None) -> list[ActionItem]:
@@ -134,11 +156,27 @@ def build_remediation_actions(root_cause_finding: Finding | None) -> list[Action
     return list(root_cause_finding.recommended_actions)
 
 
+_TIME_HORIZON_LABELS: dict[str, str] = {"immediate": "Immediate", "medium_term": "Medium-term"}
+_RISK_TIER_LABELS: dict[str, str] = {
+    "auto_executable": "auto-executable",
+    "requires_approval": "requires approval",
+}
+
+
 def build_remediation_actions_markdown(actions: list[ActionItem]) -> str:
-    return "\n".join(
-        f"- [{action.time_horizon}] {action.description} (risk: {action.risk_tier})"
-        for action in actions
-    )
+    if not actions:
+        return ""
+    blocks: list[str] = []
+    for horizon_key, horizon_label in _TIME_HORIZON_LABELS.items():
+        horizon_actions = [a for a in actions if a.time_horizon == horizon_key]
+        if not horizon_actions:
+            continue
+        lines = [f"### {horizon_label}"]
+        for action in horizon_actions:
+            risk_label = _RISK_TIER_LABELS.get(action.risk_tier, action.risk_tier)
+            lines.append(f"- {action.description} *({risk_label})*")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
 
 
 def build_preventive_actions(findings: dict[str, Finding]) -> list[str]:
@@ -152,15 +190,32 @@ def build_preventive_actions(findings: dict[str, Finding]) -> list[str]:
     return seen
 
 
-def render_report_markdown(incident_id: str, sections: IncidentReportSections) -> str:
+_EMPTY_SECTION_PLACEHOLDERS: dict[str, str] = {
+    "root_cause_analysis": "_No root cause could be determined from available findings._",
+    "evidence_citations": "_No evidence was available to cite._",
+    "remediation_actions": "_No remediation actions were recommended._",
+    "preventive_recommendations": "_None._",
+}
+
+
+def render_report_markdown(
+    incident_id: str,
+    sections: IncidentReportSections,
+    confidence_score: float,
+    confidence_band: ConfidenceBand,
+) -> str:
+    def _section(field_name: str, label: str) -> str:
+        content = getattr(sections, field_name).strip()
+        if not content:
+            content = _EMPTY_SECTION_PLACEHOLDERS.get(field_name, "_None._")
+        return f"## {label}\n\n{content}"
+
+    body = "\n\n".join(_section(field_name, label) for field_name, label in _SECTION_LABELS.items())
     return (
         f"# Incident Report: {incident_id}\n\n"
-        f"## Executive Summary\n{sections.executive_summary}\n\n"
-        f"## Observed Symptoms\n{sections.observed_symptoms}\n\n"
-        f"## Root Cause Analysis\n{sections.root_cause_analysis}\n\n"
-        f"## Evidence Citations\n{sections.evidence_citations}\n\n"
-        f"## Remediation Actions\n{sections.remediation_actions}\n\n"
-        f"## Preventive Recommendations\n{sections.preventive_recommendations}\n"
+        f"**Confidence:** {confidence_score:.0%} ({confidence_band})\n\n"
+        "---\n\n"
+        f"{body}\n"
     )
 
 
@@ -207,7 +262,9 @@ def run_incident_summary(
     confidence_score, confidence_band = compute_confidence(root_cause_finding)
 
     return IncidentSummaryResult(
-        incident_report_md=render_report_markdown(incident_id, sections),
+        incident_report_md=render_report_markdown(
+            incident_id, sections, confidence_score, confidence_band
+        ),
         sections=sections,
         cited_evidence=cited_evidence,
         remediation_actions=remediation_actions,
