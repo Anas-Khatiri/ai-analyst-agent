@@ -20,6 +20,12 @@ permissions:
 
 env:
   UV_VERSION: "0.9.0" # matches the version pinned in Dockerfile's builder stage
+  # Without this, uv falls back to whatever Python is already on the runner
+  # (3.12 on current ubuntu-latest images) instead of the 3.11 this project
+  # actually targets (.python-version, Dockerfile's python:3.11-slim,
+  # [tool.mypy] python_version) -- a real mismatch, not just cosmetic: numpy's
+  # bundled stubs use 3.12-only syntax that mypy then rejects under 3.11.
+  PYTHON_VERSION: "3.11"
 
 jobs:
   lint:
@@ -33,6 +39,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
       - name: Install dependencies
@@ -58,6 +65,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
       - name: Install dependencies

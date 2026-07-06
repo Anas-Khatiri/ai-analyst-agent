@@ -19,6 +19,11 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "0.9.0" # matches the version pinned in Dockerfile's builder stage
+          # Without this, uv falls back to the runner's preinstalled Python
+          # (3.12 on current ubuntu-latest images) instead of the 3.11 this
+          # project actually targets (.python-version, Dockerfile), which
+          # installs a mismatched numpy build with 3.12-only-syntax stubs.
+          python-version: "3.11"
           enable-cache: true
       - name: Install project dependencies
         run: uv sync --group dev
