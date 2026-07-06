@@ -1,0 +1,39 @@
+# Secrets -- must never enter the build context, even though the Dockerfile
+# only COPYs specific directories and would never pick these up anyway.
+.env
+.env.*
+!.env.example
+
+# Version control
+.git/
+.gitignore
+
+# Python artefacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Not needed at runtime -- dev/CI-only
+tests/
+docs/
+.agents/
+.github/
+evaluation/
+reports/
+hooks/
+*.md
+.pre-commit-config.yaml
+.semgrep.yml
+.secrets.baseline
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

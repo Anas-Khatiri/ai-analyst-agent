@@ -81,7 +81,6 @@ reports/
 # --- Additional folders you asked to exclude ------------------------------------
 docs/
 .agents/
-.github/
 
 # --------------------------------------------------------------
 # End of .gitignore
