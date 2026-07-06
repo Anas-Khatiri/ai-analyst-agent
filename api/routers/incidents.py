@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.config import APISettings, get_settings
 from api.schemas.incidents import IncidentRequest, IncidentResponse
+from api.security import require_api_key
 from api.services.incident_service import (
     IncidentAnalysisError,
     IncidentAnalysisTimeout,
@@ -23,7 +24,12 @@ from api.services.incident_service import (
 router = APIRouter(tags=["incidents"])
 
 
-@router.post("/incidents", response_model=IncidentResponse, status_code=200)
+@router.post(
+    "/incidents",
+    response_model=IncidentResponse,
+    status_code=200,
+    dependencies=[Depends(require_api_key)],
+)
 async def create_incident(
     trigger: IncidentRequest,
     model: str | None = Query(

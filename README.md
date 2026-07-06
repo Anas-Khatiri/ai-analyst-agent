@@ -38,12 +38,17 @@ ml-analyst-agent/
    ```
 2. Populate the `GEMINI_API_KEY` in `.env` with your API key.
 
-3. Synchronize development dependencies:
+3. Set `API_KEY` in `.env` to a secret of your choosing — required to call `POST /incidents` (see "Running the API" below):
+   ```bash
+   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+4. Synchronize development dependencies:
    ```bash
    uv sync --group dev
    ```
 
-4. Activate the virtual environment:
+5. Activate the virtual environment:
    ```bash
    source .venv/bin/activate
    ```
@@ -64,8 +69,8 @@ Once it's up, open **http://localhost:8000/docs** for the interactive Swagger UI
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /health`, `/ready`, `/live`, `/ping` | Health checks — no agent/LLM involved |
-| `POST /incidents` | Submits an incident, runs the full investigation, returns the completed `IncidentReport`. **Synchronous** — a real request takes ~8-20s (real Gemini call + a real MCP server subprocess per incident), so don't expect an instant reply |
+| `GET /health`, `/ready`, `/live`, `/ping` | Health checks — no agent/LLM involved, no auth required |
+| `POST /incidents` | Submits an incident, runs the full investigation, returns the completed `IncidentReport`. **Requires an `X-API-Key` header** matching your `.env`'s `API_KEY` (401 without it, 503 if the server has none configured). **Synchronous** — a real request takes ~8-20s (real Gemini call + a real MCP server subprocess per incident), so don't expect an instant reply |
 
 ### Try it with a real request
 
@@ -73,10 +78,10 @@ Four ready-made sample incidents live in `evaluation/datasets/example.jsonl` (on
 
 ```bash
 sed -n '1p' evaluation/datasets/example.jsonl | curl -X POST http://localhost:8000/incidents \
-  -H 'Content-Type: application/json' -d @-
+  -H 'X-API-Key: your-api-key' -H 'Content-Type: application/json' -d @-
 ```
 
-(swap `1p` for `2p`/`3p`/`4p` to try the other scenarios, or paste a line into the Swagger UI's "Try it out" box for `POST /incidents`)
+(swap `1p` for `2p`/`3p`/`4p` to try the other scenarios; in the Swagger UI, click the **"Authorize"** lock icon first to set your API key once, then use "Try it out" on `POST /incidents` as normal)
 
 ## Development Commands
 

@@ -12,6 +12,9 @@ from api.config import APISettings, get_settings
 from api.main import app
 from shared.schemas.incident import IncidentReport
 
+_TEST_API_KEY = "test-api-key"  # pragma: allowlist secret
+_AUTH_HEADERS = {"X-API-Key": _TEST_API_KEY}
+
 _VALID_TRIGGER: dict[str, object] = {
     "alert_type": "DownstreamAccuracyDrop",
     "severity": "high",
@@ -50,6 +53,7 @@ def _has_real_api_key() -> bool:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
+    app.dependency_overrides[get_settings] = lambda: APISettings(api_key=_TEST_API_KEY)
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -65,7 +69,7 @@ def test_create_incident_returns_agent_report(
 
     monkeypatch.setattr("api.services.incident_service.analyze_incident_react", _fake_analyze)
 
-    response = client.post("/incidents", json=_VALID_TRIGGER)
+    response = client.post("/incidents", json=_VALID_TRIGGER, headers=_AUTH_HEADERS)
 
     assert response.status_code == 200
     body = response.json()
@@ -77,7 +81,7 @@ def test_create_incident_missing_required_field_returns_422(client: TestClient) 
     invalid_trigger = dict(_VALID_TRIGGER)
     del invalid_trigger["affected_system"]
 
-    response = client.post("/incidents", json=invalid_trigger)
+    response = client.post("/incidents", json=invalid_trigger, headers=_AUTH_HEADERS)
 
     assert response.status_code == 422
 
@@ -92,7 +96,7 @@ def test_create_incident_agent_failure_returns_502(
 
     monkeypatch.setattr("api.services.incident_service.analyze_incident_react", _raising_analyze)
 
-    response = client.post("/incidents", json=_VALID_TRIGGER)
+    response = client.post("/incidents", json=_VALID_TRIGGER, headers=_AUTH_HEADERS)
 
     assert response.status_code == 502
     assert "boom" not in response.text
@@ -108,16 +112,38 @@ def test_create_incident_timeout_returns_504(
         return _fake_report()
 
     monkeypatch.setattr("api.services.incident_service.analyze_incident_react", _slow_analyze)
-    app.dependency_overrides[get_settings] = lambda: APISettings(request_timeout_seconds=0.05)
+    app.dependency_overrides[get_settings] = lambda: APISettings(
+        request_timeout_seconds=0.05, api_key=_TEST_API_KEY
+    )
 
-    response = client.post("/incidents", json=_VALID_TRIGGER)
+    response = client.post("/incidents", json=_VALID_TRIGGER, headers=_AUTH_HEADERS)
 
     assert response.status_code == 504
 
 
+def test_create_incident_missing_api_key_returns_401(client: TestClient) -> None:
+    response = client.post("/incidents", json=_VALID_TRIGGER)
+
+    assert response.status_code == 401
+
+
+def test_create_incident_wrong_api_key_returns_401(client: TestClient) -> None:
+    response = client.post("/incidents", json=_VALID_TRIGGER, headers={"X-API-Key": "wrong-key"})
+
+    assert response.status_code == 401
+
+
+def test_create_incident_unconfigured_api_key_returns_503(client: TestClient) -> None:
+    app.dependency_overrides[get_settings] = lambda: APISettings(api_key="")
+
+    response = client.post("/incidents", json=_VALID_TRIGGER, headers=_AUTH_HEADERS)
+
+    assert response.status_code == 503
+
+
 @pytest.mark.skipif(not _has_real_api_key(), reason="requires a real GEMINI_API_KEY")
 def test_create_incident_live_end_to_end(client: TestClient) -> None:
-    response = client.post("/incidents", json=_VALID_TRIGGER)
+    response = client.post("/incidents", json=_VALID_TRIGGER, headers=_AUTH_HEADERS)
 
     assert response.status_code == 200
     body = response.json()

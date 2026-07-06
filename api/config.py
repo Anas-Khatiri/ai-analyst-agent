@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,15 @@ class APISettings(BaseSettings):
     default_model: str = "gemini-2.5-flash"
     default_max_tool_calls: int = 6
     request_timeout_seconds: float = 60.0
+
+    api_key: str = Field(
+        default="",
+        description=(
+            "Required to call POST /incidents (sent as the X-API-Key header). "
+            "Empty means auth is not configured -- requests are rejected, not "
+            "silently allowed through, until an operator sets this explicitly."
+        ),
+    )
 
 
 @lru_cache
