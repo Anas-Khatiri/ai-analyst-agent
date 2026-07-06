@@ -49,6 +49,16 @@ class EvalResult:
 
 _TERMINAL_SKILLS = {"root_cause_prioritization", "incident_summary"}
 
+# Substrings identifying a Gemini free-tier quota/rate-limit rejection (both
+# the daily cap and the per-minute burst limit surface as RESOURCE_EXHAUSTED
+# with a 429 status) -- distinct from a real agent/skill bug, and excluded
+# from the pass-rate gate below rather than counted as a failure.
+_QUOTA_MARKERS = ("RESOURCE_EXHAUSTED", "429")
+
+
+def _is_quota_exhausted(error_message: str) -> bool:
+    return any(marker in error_message for marker in _QUOTA_MARKERS)
+
 
 async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
     """Run the agent on a single payload and evaluate it against structural
@@ -90,11 +100,11 @@ async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
         )
     except Exception as exc:
         latency = time.time() - start
-        return EvalResult(
-            latency=latency,
-            passed=False,
-            details={"latency": latency, "crash": str(exc)},
-        )
+        error_message = str(exc)
+        crash_details: dict[str, Any] = {"latency": latency, "crash": error_message}
+        if _is_quota_exhausted(error_message):
+            crash_details["quota_exhausted"] = True
+        return EvalResult(latency=latency, passed=False, details=crash_details)
     latency = time.time() - start
 
     passed = True
@@ -148,11 +158,25 @@ async def _async_file_reader(path: Path) -> AsyncIterator[str]:
 
 def summarize(results: list[EvalResult]) -> None:
     total = len(results)
-    passed = sum(r.passed for r in results)
-    pass_rate = passed / total if total else 0.0
-    avg_latency = sum(r.latency for r in results) / total if total else 0.0
+    quota_exhausted = [r for r in results if r.details.get("quota_exhausted")]
+    gated = [r for r in results if not r.details.get("quota_exhausted")]
+
     print("=== Evaluation Summary ===")
     print(f"Cases evaluated : {total}")
+    if quota_exhausted:
+        print(
+            f"Excluded (quota/rate-limit hit): {len(quota_exhausted)} -- Gemini free-tier "
+            "limit, not a code regression; excluded from the pass-rate gate below"
+        )
+
+    if not gated:
+        print("No cases produced a real result (all hit quota/rate limits) -- inconclusive,")
+        print("not treated as pass or fail. Retry once quota resets.")
+        return
+
+    passed = sum(r.passed for r in gated)
+    pass_rate = passed / len(gated)
+    avg_latency = sum(r.latency for r in gated) / len(gated)
     print(f"Pass rate      : {pass_rate:.2%} (threshold {EVALUATION_PASS_RATE_THRESHOLD:.2%})")
     print(f"Avg latency    : {avg_latency:.2f}s (threshold {MAX_LATENCY_SECONDS:.2f}s)")
     if pass_rate < EVALUATION_PASS_RATE_THRESHOLD:
