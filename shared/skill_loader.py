@@ -46,7 +46,7 @@ async def execute_skill(
 
     Exceptions propagate uncaught — this function never decides what a
     failure means. The caller (the Skill Executor stage in
-    agents/ml_analyst_agent.py) is responsible for catching a failure and
+    agents/investigation_core.py) is responsible for catching a failure and
     marking that skill "unavailable" per ml_analyst_agent.md §11, rather
     than this loader silently swallowing or reinterpreting it.
 

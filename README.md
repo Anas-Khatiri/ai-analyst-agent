@@ -7,7 +7,7 @@ An autonomous AI Agent platform designed to monitor production data pipelines, m
 ```
 ml-analyst-agent/
 ├── .agents/       # Project customizations and local guardrails (CONTEXT.md)
-├── agents/        # ML Analyst Agent orchestration: skill_selection_engine.py, ml_analyst_agent.py
+├── agents/        # ML Analyst Agent: react_agent.py (entrypoint), investigation_core.py, skill_selection_engine.py
 ├── api/           # FastAPI application (not yet implemented)
 ├── docs/          # Project documentation (specifications, architecture, decisions)
 ├── eval/          # Evaluation datasets and scripts

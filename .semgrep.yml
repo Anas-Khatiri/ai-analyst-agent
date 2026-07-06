@@ -15,11 +15,3 @@ rules:
     languages: [python]
     metadata:
       category: security
-  - id: use-audit-log
-    patterns:
-      - pattern: logging.\w+(
-    message: "Direct logging calls should be replaced with shared.security.audit_log.audit_event for structured, redacted logs."
-    severity: WARNING
-    languages: [python]
-    metadata:
-      category: best-practice

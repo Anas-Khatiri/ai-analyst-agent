@@ -3,15 +3,21 @@
 """Minimal evaluation runner.
 
 The runner loads a JSONL file where each line is a trigger payload compatible with
-`agents.ml_analyst_agent.analyze_incident`. For each case it:
+`agents.react_agent.analyze_incident_react`. For each case it:
 
 1. Starts a trace collector (currently a stub - can be expanded later).
-2. Calls the agent asynchronously.
+2. Calls the agent asynchronously (a real Gemini call + a real MCP server
+   subprocess per case — see agents/react_agent.py).
 3. Measures latency.
 4. Computes basic quality-gate checks using the thresholds defined in
    `evaluation.config`.
 5. Aggregates results and prints a concise summary.  The script exits with a
    non-zero status if any case fails a threshold, making it suitable for CI.
+
+Since the agent is LLM-driven, results (which skills get called, latency)
+can vary run to run — this harness only asserts structural properties
+(latency budget, human-review flag), never which specific skill the model
+chose, per .agents/CONTEXT.md §4.
 """
 
 import asyncio
@@ -23,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 # Import the agent entrypoint
-from agents.ml_analyst_agent import analyze_incident
+from agents.react_agent import analyze_incident_react
 from evaluation.config import (
     EVALUATION_PASS_RATE_THRESHOLD,
     MAX_LATENCY_SECONDS,
@@ -49,7 +55,7 @@ async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
     added later.
     """
     start = time.time()
-    report = await analyze_incident(payload)
+    report = await analyze_incident_react(payload)
     latency = time.time() - start
 
     # Basic quality checks - expand as needed.

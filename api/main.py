@@ -4,11 +4,14 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.responses import JSONResponse
 
 # Import configuration, logging and instrumentation
+from api.routers import incidents
 from shared.logging_config import configure_logging
 
 app = FastAPI(title="ml-analyst-agent", version="0.1.0")
 instrumentor = Instrumentator()
 instrumentor.instrument(app).expose(app)
+
+app.include_router(incidents.router)
 
 # Initialize logging
 configure_logging()

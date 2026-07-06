@@ -43,8 +43,6 @@ COPY skills/ skills/
 COPY shared/ shared/
 COPY services/ services/
 COPY api/ api/
-COPY configs/ configs/
-COPY main.py ./
 
 # Adjust permissions so the non-privileged user owns the app directory
 RUN chown -R appuser:appgroup /app

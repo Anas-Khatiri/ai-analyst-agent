@@ -4,7 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.incident import IncidentSignature
 from shared.skill_registry import SkillMetadata, SkillRegistry
 
 ExecutionMode = Literal["parallel", "sequential"]
@@ -61,31 +60,6 @@ class SkillSelectionEngine:
     ) -> None:
         self.registry = registry
         self.max_skills_per_wave = max_skills_per_wave
-
-    def select_initial_wave(
-        self, signature: IncidentSignature, skill_parameters: dict[str, dict[str, object]]
-    ) -> SelectionPlan:
-        """Wave 0: signal-based routing per §3.1."""
-        if self.registry.is_empty():
-            return SelectionPlan(
-                wave_id=0,
-                execution_mode="parallel",
-                rationale=(
-                    "Skill Registry is empty or unreachable; no automated "
-                    "investigation is possible."
-                ),
-                continuation_signal="terminate",
-                termination_reason="registry_unavailable",
-            )
-
-        candidates = self.registry.resolve_skills_for_alert(signature.alert_type)
-        return self._assemble_investigative_wave(
-            wave_id=0,
-            candidates=candidates,
-            trigger_reason="signal_match",
-            skill_parameters=skill_parameters,
-            already_executed=set(),
-        )
 
     def select_next_wave(
         self,

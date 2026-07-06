@@ -60,7 +60,7 @@ class RawTrigger(BaseModel):
             "Phase 3-5 scoped limitation: concrete kwargs per skill name, supplied "
             "by whoever raises the incident, since no real feature-store/context "
             "resolution exists yet to derive these automatically. See "
-            "agents/ml_analyst_agent.py module docstring."
+            "agents/investigation_core.py module docstring."
         ),
     )
 

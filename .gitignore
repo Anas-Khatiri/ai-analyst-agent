@@ -3,9 +3,12 @@
 # --------------------------------------------------------------
 
 # --- Environment & secret files ------------------------------------------------
-.env                # local environment variables (API keys, DB passwords, …)
-.env.*              # any variant (e.g. .env.dev, .env.test, .env.production)
-.env.example        # keep a template, but don’t track the real values
+# local environment variables (API keys, DB passwords, …)
+.env
+# any variant (e.g. .env.dev, .env.test, .env.production)
+.env.*
+# keep a template, but don't track the real values
+.env.example
 
 # --- Python byte‑code ---------------------------------------------------------
 __pycache__/
@@ -52,7 +55,8 @@ ruff_cache/
 dmypy.json
 
 # --- Documentation ------------------------------------------------------------
-/site/                # MkDocs / Sphinx output
+# MkDocs / Sphinx output
+/site/
 /docs/_build/
 
 # --- IDE / editor files ------------------------------------------------------

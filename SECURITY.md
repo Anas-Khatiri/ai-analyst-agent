@@ -3,19 +3,15 @@
 ## Overview
 This repository implements a production‑grade **security hardening layer** for the ML Analyst Agent.  The security package lives under `shared/security/` and provides:
 - **Input validation** using Pydantic models.
-- **Prompt injection / jailbreak protection**.
 - **PII redaction** before any logging or external transmission.
 - **Tool allow‑list enforcement** – only skills marked as `investigative` may be executed.
-- **Structured audit logging** that omits secrets.
 - **Semgrep CI integration** to catch dangerous patterns.
 
 ## Core Modules
 | Module | Purpose |
 |---|---|
 | `validation.py` | Pydantic based schemas (`SecureModel`) that validate external inputs.
-| `prompt_guard.py` | Detects black‑listed phrases and raises `SecurityError`.
 | `redaction.py` | Regex‑based redaction of emails, IPs, tokens, etc.
-| `audit_log.py` | JSON‑structured logger (`audit_event`) that automatically redacts PII.
 | `exceptions.py` | Central `SecurityError` hierarchy.
 | `skill_loader.py` (updated) | Enforces the **allow‑list** by checking `SkillMetadata.role` before loading a skill.
 
@@ -29,19 +25,12 @@ When adding new security‑related functionality or new skills, follow these ste
        raise SecurityError(...)
    ```
 4. **Redact any new secret patterns** – extend `PII_REGEXES` in `redaction.py` with appropriate patterns and add unit tests.
-5. **Add audit logging** – use `audit_event(event_type, payload)` for any security‑relevant actions.
-6. **Write tests** – add coverage in `tests/security/` for the new logic (validation, guard, redaction).
-7. **Semgrep rule** – if the new code introduces a risky operation (e.g., `os.system`), add a rule to `.semgrep.yml` so CI will fail on regressions.
+5. **Write tests** – add coverage in `tests/security/` for the new logic (validation, redaction).
+6. **Semgrep rule** – if the new code introduces a risky operation (e.g., `os.system`), add a rule to `.semgrep.yml` so CI will fail on regressions.
 
 ## CI / CD
 - The repository includes a GitHub Actions workflow at `.github/workflows/semgrep.yml` that runs on each push and fails on **high** or **critical** findings.
 - Ensure new modules are imported in `__init__.py` so they are linted.
-
-## Auditing & Logging
-All security‑relevant events should be emitted via `audit_log.audit_event`.  The log format is JSON and automatically redacts any fields that match the patterns in `redaction.py`.  Example:
-```json
-{"timestamp":"2026-07-05T12:00:00Z","event":"skill_executed","tool":"data_drift","user":"agent","status":"success"}
-```
 
 ## Common Pitfalls
 - **Do not** bypass the allow‑list by calling `load_skill_script` directly – always go through `execute_skill`.
@@ -50,7 +39,6 @@ All security‑relevant events should be emitted via `audit_log.audit_event`.  T
 
 ## Further Reading
 - `docs/specifications/SYSTEM_SPEC.md` – overall system architecture.
-- `shared/security/audit_log.py` – implementation details of the audit logger.
 - `shared/security/redaction.py` – regular expressions used for PII removal.
 - `shared/security/validation.py` – how to declare secure Pydantic models.
 

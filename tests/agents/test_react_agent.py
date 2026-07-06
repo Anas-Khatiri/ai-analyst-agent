@@ -7,10 +7,13 @@ from datetime import UTC, datetime
 import pytest
 from google.genai.errors import ServerError
 
-from agents.ml_analyst_agent import InvestigationSession
-from agents.react_agent import analyze_incident_react, build_investigative_tools
+from agents.investigation_core import InvestigationSession
+from agents.react_agent import (
+    _extract_tool_payload,
+    _record_tool_observation,
+    analyze_incident_react,
+)
 from shared.schemas.incident import IncidentReport
-from shared.skill_registry import SkillRegistry
 
 _LIVE_API_RETRIES = 3
 _LIVE_API_RETRY_DELAY_SECONDS = 5.0
@@ -35,57 +38,67 @@ async def _analyze_incident_react_with_retry(trigger: dict[str, object]) -> Inci
     raise last_error
 
 
-def _registry() -> SkillRegistry:
-    registry = SkillRegistry()
-    registry.scan_skills()
-    return registry
-
-
 def _has_real_api_key() -> bool:
     key = os.getenv("GEMINI_API_KEY")
     return bool(key) and key != "your_gemini_api_key_here"
 
 
-def test_build_investigative_tools_excludes_terminal_skills() -> None:
-    session = InvestigationSession("INC-1")
-    tools = build_investigative_tools(_registry(), {}, session)
-
-    names = {tool.name for tool in tools}
-    assert names == {"data_drift_analysis", "model_performance_analysis"}
-    assert "root_cause_prioritization" not in names
-    assert "incident_summary" not in names
-
-
-def test_tool_name_and_description_match_skill_metadata() -> None:
-    registry = _registry()
-    session = InvestigationSession("INC-1")
-    tools = build_investigative_tools(registry, {}, session)
-
-    for tool in tools:
-        meta = registry.get(tool.name)
-        assert meta is not None
-        assert tool.description == meta.description
-
-
-async def test_calling_tool_function_directly_executes_skill_and_records_finding() -> None:
-    registry = _registry()
-    session = InvestigationSession("INC-1")
-    skill_parameters = {
-        "data_drift_analysis": {
-            "reference_dataset_id": "fraud_detection_xgboost",
-            "current_dataset_id": "fraud_detection_xgboost",
-            "numerical_features": ["transaction_amount"],
-            "categorical_features": ["user_zipcode", "device_type"],
-            "min_sample_size": 100,
-        }
+def test_extract_tool_payload_from_structured_content() -> None:
+    mcp_response = {
+        "content": [{"type": "text", "text": '{\n  "confidence_score": 0.9\n}'}],
+        "structuredContent": {"confidence_score": 0.9},
+        "isError": False,
     }
-    tools = build_investigative_tools(registry, skill_parameters, session)
-    drift_tool = next(t for t in tools if t.name == "data_drift_analysis")
 
-    result = await drift_tool.func()
+    assert _extract_tool_payload(mcp_response) == {"confidence_score": 0.9}
 
-    assert "confidence_score" in result
-    assert session.findings["data_drift_analysis"].confidence_score >= 0.8
+
+def test_extract_tool_payload_falls_back_to_content_text() -> None:
+    mcp_response = {
+        "content": [{"type": "text", "text": '{"confidence_score": 0.5}'}],
+        "isError": False,
+    }
+
+    assert _extract_tool_payload(mcp_response) == {"confidence_score": 0.5}
+
+
+def test_extract_tool_payload_from_is_error() -> None:
+    mcp_response = {
+        "content": [{"type": "text", "text": "boom"}],
+        "isError": True,
+    }
+
+    assert _extract_tool_payload(mcp_response) == {"error": "boom"}
+
+
+def test_record_tool_observation_records_finding_and_selection_record() -> None:
+    session = InvestigationSession("INC-1")
+    payload = {
+        "investigation_summary": "drift detected",
+        "evidence": [
+            {
+                "evidence_id": "drift-1",
+                "subject": "transaction_amount",
+                "metric": "psi",
+                "value": 0.4,
+                "baseline": 0.1,
+                "time_window": {
+                    "start": "2026-01-01T00:00:00Z",
+                    "end": "2026-01-02T00:00:00Z",
+                },
+                "source_skill": "data_drift_analysis",
+            }
+        ],
+        "possible_root_causes": [],
+        "confidence_score": 0.9,
+        "recommended_actions": [],
+        "preventive_actions": [],
+        "limitations": [],
+    }
+
+    _record_tool_observation("data_drift_analysis", payload, session)
+
+    assert session.findings["data_drift_analysis"].confidence_score == 0.9
     assert "data_drift_analysis" in session.executed_skills
     assert len(session.ledger.entries) > 0
     assert any(
@@ -94,16 +107,12 @@ async def test_calling_tool_function_directly_executes_skill_and_records_finding
     )
 
 
-async def test_calling_tool_function_records_unavailable_on_bad_params() -> None:
-    registry = _registry()
+def test_record_tool_observation_records_unavailable_on_error_payload() -> None:
     session = InvestigationSession("INC-1")
-    tools = build_investigative_tools(registry, {}, session)
-    perf_tool = next(t for t in tools if t.name == "model_performance_analysis")
 
-    result = await perf_tool.func()
+    _record_tool_observation("model_performance_analysis", {"error": "boom"}, session)
 
-    assert "error" in result
-    assert "model_performance_analysis" in session.unavailable_skills
+    assert session.unavailable_skills["model_performance_analysis"] == "boom"
     assert "model_performance_analysis" not in session.findings
 
 

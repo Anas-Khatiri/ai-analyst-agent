@@ -18,7 +18,12 @@ SECURITY_CONTAINMENT_THRESHOLD = 1.0  # 100%
 SCHEMA_VALIDATION_THRESHOLD = 1.0  # 100%
 EVALUATION_PASS_RATE_THRESHOLD = 0.98  # 98%
 HALLUCINATION_RATE_MAX = 0.02  # 2%
-MAX_LATENCY_SECONDS = 3.0  # <= 3 seconds
+# The agent's only entrypoint (agents/react_agent.py::analyze_incident_react)
+# spawns a real MCP server subprocess and makes a real Gemini call per
+# incident, per ADR-006-remove-deterministic-mode.md -- 3s (the old
+# deterministic-path budget) is unrealistic; ~8s was observed for a live
+# end-to-end run in this repo's test suite.
+MAX_LATENCY_SECONDS = 20.0  # <= 20 seconds
 ALLOW_SECURITY_LEAKS = False
 
 # Dataset paths (relative to this package)

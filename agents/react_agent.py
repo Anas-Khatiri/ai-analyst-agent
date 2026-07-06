@@ -1,46 +1,58 @@
-"""LLM-driven ReAct alternative to agents/ml_analyst_agent.py's deterministic
-skill selection, per ADR-004-react-skill-selection.md.
+"""The ML Analyst Agent's sole entrypoint: an LLM-driven ReAct agent that
+dynamically selects investigative skills and invokes them through a real
+MCP (Model Context Protocol) tool call, per
+ADR-004-react-skill-selection.md, ADR-005-mcp-skill-invocation.md, and
+ADR-006-remove-deterministic-mode.md.
 
-Only the investigative-skill *selection* mechanism changes here: instead of
-SkillSelectionEngine's alert_triggers metadata matching, a google-adk Agent
-reads each investigative skill's prose `description`, reasons about which is
-relevant to the incident, calls it (Action), observes the resulting Finding,
-and loops (ADK's Runner implements the Thought -> Action -> Observation
-multi-turn loop internally once tools are attached to the agent -- this
-module does not hand-roll that loop, it consumes and logs the Event stream
-the Runner produces).
+A google-adk `Agent` reads each investigative skill's prose `description`,
+reasons about which is relevant to the incident, calls it (Action), observes
+the resulting Finding, and loops (ADK's Runner implements the Thought ->
+Action -> Observation multi-turn loop internally once tools are attached to
+the agent -- this module does not hand-roll that loop, it consumes and logs
+the Event stream the Runner produces).
 
-Everything downstream of selection is identical to the deterministic agent:
-the terminal wave (root_cause_prioritization -> incident_summary) and report
-assembly reuse `execute_wave`/`record_selection`/`assemble_report`/`intake`
-from agents/ml_analyst_agent.py unchanged. Combination stays deterministic
-regardless of how a skill was selected, per .agents/CONTEXT.md §6.3.
+Everything downstream of selection reuses `execute_wave`/`record_selection`/
+`assemble_report`/`intake` from agents/investigation_core.py unchanged: the
+terminal wave (root_cause_prioritization -> incident_summary) and report
+assembly. Combination stays deterministic regardless of how a skill was
+selected, per .agents/CONTEXT.md §6.3.
 
 Terminal skills are never exposed to the LLM as tools: their required_inputs
 include `dict[str, Finding]`, which an LLM cannot meaningfully construct.
 
-Investigative tools take no LLM-supplied arguments. Their connection
-parameters come from the same `skill_parameters` trigger field the
-deterministic agent uses (Phase 3-5 scoped limitation — see
-agents/ml_analyst_agent.py's module docstring) and are bound into the tool
-closure ahead of time, so the LLM's only decision is *whether* a tool is
-relevant, never fabricating dataset identifiers it has no way to know.
+Investigative skills are invoked through a real MCP (Model Context Protocol)
+tool call, per ADR-005-mcp-skill-invocation.md: a fresh
+services/mcp/skill_mcp_server.py subprocess is spawned per incident, and this
+module connects to it as an MCP client via google-adk's `McpToolset`. The
+incident's `skill_parameters` (Phase 3-5 scoped limitation — see
+agents/investigation_core.py's module docstring) are passed to the server via
+an environment variable at subprocess launch, *before* any tool schema is
+ever shown to the LLM — every tool the server advertises is genuinely
+zero-argument, so the LLM's only decision is *whether* a tool is relevant,
+never fabricating dataset identifiers it has no way to know. Because skill
+execution now happens in a separate process, the InvestigationSession
+bookkeeping that used to happen inside the (in-process) tool closure instead
+happens here, client-side, off each MCP tool call's `function_response`
+event -- see `_extract_tool_payload`/`_record_tool_observation` below.
 """
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Awaitable, Callable
+import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.events import Event
 from google.adk.runners import InMemoryRunner
-from google.adk.tools.function_tool import FunctionTool
+from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
 from google.genai import types
+from mcp import StdioServerParameters
 
-from agents.ml_analyst_agent import (
+from agents.investigation_core import (
     InvestigationSession,
     assemble_report,
     execute_wave,
@@ -49,16 +61,17 @@ from agents.ml_analyst_agent import (
 )
 from agents.skill_selection_engine import SkillSelectionEngine
 from shared.logging_utils import log_event
+from shared.schemas.finding import Finding
 from shared.schemas.incident import (
     IncidentReport,
     IncidentSignature,
     RawTrigger,
     SkillSelectionRecord,
 )
-from shared.skill_loader import execute_skill
-from shared.skill_registry import SkillMetadata, SkillRegistry
+from shared.skill_registry import SkillRegistry
 
 _LOGGER = logging.getLogger(__name__)
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 MAX_TOOL_CALLS = 6
@@ -90,89 +103,98 @@ def _build_initial_message(signature: IncidentSignature) -> str:
     )
 
 
-def make_investigative_tool_function(
-    meta: SkillMetadata,
-    script_path: Path,
-    resolved_params: dict[str, object],
-    session: InvestigationSession,
-) -> Callable[[], Awaitable[dict[str, object]]]:
-    """Builds a zero-argument async tool function for one investigative skill.
+def build_skill_mcp_toolset(skill_parameters: dict[str, dict[str, object]]) -> McpToolset:
+    """Builds the MCP client toolset for one incident investigation.
 
-    `__name__`/`__doc__` are set from the skill's metadata so
-    `google.adk.tools.FunctionTool` derives the tool's name and description
-    from them — this is the literal "reading skill descriptions in prose"
-    mechanism the LLM reasons over.
+    Spawns services/mcp/skill_mcp_server.py as a fresh stdio subprocess,
+    passing the incident's resolved `skill_parameters` via an environment
+    variable read once at server startup — see module docstring for why this
+    keeps every advertised tool genuinely zero-argument.
     """
+    env = {**os.environ, "SKILL_PARAMETERS_JSON": json.dumps(skill_parameters)}
+    return McpToolset(
+        connection_params=StdioConnectionParams(
+            server_params=StdioServerParameters(
+                command=sys.executable,
+                args=["-m", "services.mcp.skill_mcp_server"],
+                cwd=str(_REPO_ROOT),
+                env=env,
+            ),
+            timeout=10.0,
+        )
+    )
 
-    async def tool() -> dict[str, object]:
+
+def _extract_tool_payload(mcp_response: dict[str, object]) -> dict[str, object]:
+    """Normalizes an MCP tool call's response dict (an ADK `MCPTool`'s
+    `run_async` result, itself a `mcp.types.CallToolResult.model_dump()`)
+    back to the flat `{"error": ...}` | Finding-shaped dict every
+    investigative tool returned in-process before MCP (ADR-005 §3.2).
+
+    `structuredContent` is the primary path: services/mcp/skill_mcp_server.py
+    never raises, so a skill failure surfaces there as `{"error": ...}`, not
+    as `isError: true` — the `isError` branch below only covers an MCP
+    protocol-level failure (e.g. the server process itself misbehaving).
+    """
+    if mcp_response.get("isError"):
+        content = mcp_response.get("content")
+        first = content[0] if isinstance(content, list) and content else None
+        text = first.get("text") if isinstance(first, dict) else None
+        return {"error": text or "MCP tool call reported isError=true with no content."}
+    structured = mcp_response.get("structuredContent")
+    if isinstance(structured, dict):
+        return structured
+    content = mcp_response.get("content")
+    first = content[0] if isinstance(content, list) and content else None
+    if isinstance(first, dict) and isinstance(first.get("text"), str):
+        parsed = json.loads(first["text"])
+        if isinstance(parsed, dict):
+            return parsed
+    return mcp_response
+
+
+def _record_tool_observation(
+    tool_name: str, payload: dict[str, object], session: InvestigationSession
+) -> None:
+    """Client-side counterpart of the old in-closure session mutation: called
+    once per MCP tool call, off that call's `function_response` payload."""
+    if "error" in payload:
+        session.unavailable_skills[tool_name] = str(payload["error"])
         log_event(
             _LOGGER,
-            logging.INFO,
+            logging.WARNING,
             __name__,
             session.incident_id,
-            "skill_invocation_requested",
-            skill_name=meta.name,
+            "skill_unavailable",
+            skill_name=tool_name,
+            error=str(payload["error"]),
         )
-        try:
-            # Any exception here means "unavailable"; never crash the ReAct loop.
-            finding = await execute_skill(meta, script_path, resolved_params)
-        except Exception as exc:
-            session.unavailable_skills[meta.name] = str(exc)
-            log_event(
-                _LOGGER,
-                logging.WARNING,
-                __name__,
-                session.incident_id,
-                "skill_unavailable",
-                skill_name=meta.name,
-                error=str(exc),
-            )
-            return {"error": str(exc)}
+        return
 
-        session.findings[meta.name] = finding
-        session.executed_skills.add(meta.name)
-        session.ledger.add_finding(meta.name, finding, wave_index=0)
-        session.selection_records.append(
-            SkillSelectionRecord(skill_name=meta.name, trigger_reason="llm_selected", wave_index=0)
-        )
-        log_event(
-            _LOGGER,
-            logging.INFO,
-            __name__,
-            session.incident_id,
-            "skill_invocation_observed",
-            skill_name=meta.name,
-            confidence_score=finding.confidence_score,
-        )
-        return finding.model_dump(mode="json")
-
-    tool.__name__ = meta.name
-    tool.__doc__ = meta.description
-    return tool
-
-
-def build_investigative_tools(
-    registry: SkillRegistry,
-    skill_parameters: dict[str, dict[str, object]],
-    session: InvestigationSession,
-) -> list[FunctionTool]:
-    """One FunctionTool per registered investigative skill. Terminal skills
-    (role != "investigative") are never included — see module docstring."""
-    tools: list[FunctionTool] = []
-    for meta in registry.registry.values():
-        if meta.role != "investigative":
-            continue
-        script_path = registry.resolve_script_path(meta)
-        resolved_params = skill_parameters.get(meta.name, {})
-        func = make_investigative_tool_function(meta, script_path, resolved_params, session)
-        tools.append(FunctionTool(func))
-    return tools
+    finding = Finding.model_validate(payload)
+    session.findings[tool_name] = finding
+    session.executed_skills.add(tool_name)
+    session.ledger.add_finding(tool_name, finding, wave_index=0)
+    session.selection_records.append(
+        SkillSelectionRecord(skill_name=tool_name, trigger_reason="llm_selected", wave_index=0)
+    )
+    log_event(
+        _LOGGER,
+        logging.INFO,
+        __name__,
+        session.incident_id,
+        "skill_invocation_observed",
+        skill_name=tool_name,
+        confidence_score=finding.confidence_score,
+    )
 
 
 def _log_react_event(event: Event, session: InvestigationSession) -> int:
     """Logs each Thought (text)/Action (function_call)/Observation
-    (function_response) part of one ADK Event. Returns the number of tool
-    calls seen in this event, for the caller's safety-cap bookkeeping."""
+    (function_response) part of one ADK Event, and — for each Observation —
+    records the MCP tool call's result into `session` (see
+    `_record_tool_observation`). Returns the number of tool calls seen in
+    this event, for the caller's safety-cap bookkeeping."""
     tool_calls_seen = 0
     if event.content is None or event.content.parts is None:
         return tool_calls_seen
@@ -198,25 +220,29 @@ def _log_react_event(event: Event, session: InvestigationSession) -> int:
                 tool_name=part.function_call.name,
             )
         if part.function_response is not None:
+            tool_name = part.function_response.name
             log_event(
                 _LOGGER,
                 logging.INFO,
                 __name__,
                 session.incident_id,
                 "react_observation",
-                tool_name=part.function_response.name,
+                tool_name=tool_name,
             )
+            if tool_name is not None:
+                payload = _extract_tool_payload(dict(part.function_response.response or {}))
+                _record_tool_observation(tool_name, payload, session)
     return tool_calls_seen
 
 
 async def _run_react_loop(
     signature: IncidentSignature,
-    tools: list[FunctionTool],
+    toolset: McpToolset,
     session: InvestigationSession,
     model: str,
     max_tool_calls: int,
 ) -> None:
-    agent = Agent(name=APP_NAME, model=model, instruction=_INSTRUCTION, tools=tools)
+    agent = Agent(name=APP_NAME, model=model, instruction=_INSTRUCTION, tools=[toolset])
     runner = InMemoryRunner(agent=agent, app_name=APP_NAME)
     await runner.session_service.create_session(
         app_name=APP_NAME, user_id=USER_ID, session_id=signature.incident_id
@@ -245,11 +271,11 @@ async def analyze_incident_react(
     model: str = DEFAULT_MODEL,
     max_tool_calls: int = MAX_TOOL_CALLS,
 ) -> IncidentReport:
-    """The ReAct alternative to agents/ml_analyst_agent.py::analyze_incident.
+    """The ML Analyst Agent's single public entrypoint.
 
     Requires a working GEMINI_API_KEY (loaded from .env if not already in
-    the environment) — this path makes real LLM calls, unlike the
-    deterministic agent.
+    the environment) — this path makes real LLM calls and spawns a real MCP
+    server subprocess per incident.
     """
     load_dotenv()
     raw = RawTrigger.model_validate(trigger)
@@ -268,9 +294,15 @@ async def analyze_incident_react(
         mode="react",
     )
 
-    tools = build_investigative_tools(registry, raw.skill_parameters, session)
-    if tools:
-        await _run_react_loop(signature, tools, session, model, max_tool_calls)
+    has_investigative_skills = any(
+        meta.role == "investigative" for meta in registry.registry.values()
+    )
+    if has_investigative_skills:
+        toolset = build_skill_mcp_toolset(raw.skill_parameters)
+        try:
+            await _run_react_loop(signature, toolset, session, model, max_tool_calls)
+        finally:
+            await toolset.close()
 
     engine = SkillSelectionEngine(registry)
     terminal_plan = engine.select_next_wave(

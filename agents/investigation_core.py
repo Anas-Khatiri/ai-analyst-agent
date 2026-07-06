@@ -1,28 +1,20 @@
-"""ML Analyst Agent core orchestrator.
+"""Shared investigation pipeline: intake, skill execution, and report
+assembly, per ADR-006-remove-deterministic-mode.md.
 
-Ties together the Skill Registry, Skill Selection Engine, and the dynamic
-Skill Loader into the pipeline specified in docs/agents/ml_analyst_agent.md:
-Incident Intake -> Skill Selector -> Skill Executor -> Evidence Aggregator,
-looping wave by wave until the Selection Engine signals termination, then
-the terminal wave (whichever skills are registered with a terminal role,
-today root_cause_prioritization then incident_summary).
+`agents/react_agent.py::analyze_incident_react` is the sole caller of this
+module. It reasons over investigative skills' prose descriptions via an LLM
+and invokes them through a real MCP tool call (per
+ADR-004-react-skill-selection.md as amended by
+ADR-005-mcp-skill-invocation.md); once that selection step concludes,
+everything here runs unchanged: the terminal wave
+(root_cause_prioritization -> incident_summary) and report assembly.
+Combination stays deterministic regardless of how a skill was selected
+(.agents/CONTEXT.md §6.3) — no LLM reasoning is wired in here.
 
 This module never imports a skill module by name. Every skill is resolved
 generically through the SkillRegistry (parsed from each SKILL.md's YAML
 frontmatter) and invoked through shared/skill_loader.py — adding a fifth
 skill to skills/ requires zero changes here, per ADR-001-dynamic-skills.md.
-
-Scope: deterministic orchestration only (ml_analyst_agent.md §13 names
-"Deterministic Orchestration" as a core design principle). No google-adk/
-Gemini LLM reasoning loop is wired in here, and no FastAPI layer.
-
-See agents/react_agent.py for an LLM-driven ReAct alternative that swaps
-only the investigative-skill-selection mechanism for LLM reasoning over
-each skill's prose description — it reuses `execute_wave`/`record_selection`/
-`assemble_report`/`intake` from this module unchanged for everything
-downstream of selection (per ADR-004-react-skill-selection.md), since
-combination must stay deterministic (.agents/CONTEXT.md §6.3) regardless
-of how a skill was selected.
 
 Phase 3-5 scoped limitation: the caller must supply `skill_parameters` in
 the trigger (skill name -> concrete kwargs), since no real feature-store/
@@ -35,10 +27,10 @@ crashed on.
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import UTC, datetime
+from uuid import uuid4
 
-from agents.skill_selection_engine import SelectionPlan, SkillSelectionEngine
+from agents.skill_selection_engine import SelectionPlan
 from shared.logging_utils import log_event
 from shared.schemas.evidence_ledger import EvidenceLedger
 from shared.schemas.finding import ActionItem, Finding, HypothesisCandidate
@@ -55,14 +47,12 @@ from shared.skill_registry import SkillRegistry
 _LOGGER = logging.getLogger(__name__)
 
 LOW_CONFIDENCE_THRESHOLD = 0.5
-HIGH_CONFIDENCE_THRESHOLD = 0.8
-MAX_WAVES = 8
 
 _UNCLASSIFIED_REASONS = {"no_skill_matched", "registry_unavailable"}
 
 
 class InvestigationSession:
-    """Mutable state for a single analyze_incident() call: which skills have
+    """Mutable state for a single investigation: which skills have
     run, their Findings, and the Evidence Ledger.
 
     Purely in-memory for this phase — SYSTEM_ARCHITECTURE.md's Dual-Store
@@ -81,7 +71,7 @@ class InvestigationSession:
 
 
 def intake(trigger: RawTrigger) -> IncidentSignature:
-    incident_id = str(uuid.uuid4())
+    incident_id = str(uuid4())
     return IncidentSignature(
         incident_id=incident_id,
         alert_type=trigger.alert_type,
@@ -198,52 +188,6 @@ def record_selection(plan: SelectionPlan, session: InvestigationSession) -> None
                 wave_index=plan.wave_id,
             )
         )
-
-
-async def analyze_incident(trigger: dict[str, object]) -> IncidentReport:
-    """The ML Analyst Agent's single public entrypoint, per SYSTEM_SPEC.md §5."""
-    raw = RawTrigger.model_validate(trigger)
-    signature = intake(raw)
-    session = InvestigationSession(signature.incident_id)
-    registry = SkillRegistry()
-    registry.scan_skills()
-    engine = SkillSelectionEngine(registry)
-
-    log_event(
-        _LOGGER,
-        logging.INFO,
-        __name__,
-        session.incident_id,
-        "incident_received",
-        alert_type=signature.alert_type,
-    )
-
-    plan = engine.select_initial_wave(signature, raw.skill_parameters)
-    wave_id = 0
-    while True:
-        record_selection(plan, session)
-
-        if plan.selected_skills:
-            await execute_wave(plan, registry, session, signature)
-
-        if plan.continuation_signal == "terminate":
-            break
-
-        wave_id += 1
-        if wave_id > MAX_WAVES:
-            break
-        plan = engine.select_next_wave(wave_id, raw.skill_parameters, session.executed_skills)
-
-    log_event(
-        _LOGGER,
-        logging.INFO,
-        __name__,
-        session.incident_id,
-        "investigation_complete",
-        executed_skills=sorted(session.executed_skills),
-        unavailable_skills=sorted(session.unavailable_skills),
-    )
-    return assemble_report(signature, session, plan)
 
 
 def assemble_report(
