@@ -15,12 +15,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <meta charset='UTF-8'>
   <title>Evaluation Report</title>
   <style>
-    body {font-family: Arial, sans-serif; margin: 2rem;}
-    table {border-collapse: collapse; width: 100%;}
-    th, td {border: 1px solid #ddd; padding: 8px;}
-    th {background-color: #f2f2f2;}
-    .pass {background-color: #d4edda;}
-    .fail {background-color: #f8d7da;}
+    body {{font-family: Arial, sans-serif; margin: 2rem;}}
+    table {{border-collapse: collapse; width: 100%;}}
+    th, td {{border: 1px solid #ddd; padding: 8px;}}
+    th {{background-color: #f2f2f2;}}
+    .pass {{background-color: #d4edda;}}
+    .fail {{background-color: #f8d7da;}}
   </style>
 </head>
 <body>

@@ -46,19 +46,40 @@ class EvalResult:
         self.details = details
 
 
-async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
-    """Run the agent on a single payload and evaluate thresholds.
+_TERMINAL_SKILLS = {"root_cause_prioritization", "incident_summary"}
 
-    The function is deliberately simple - it only checks latency and whether the
-    report requires human review (a proxy for routing/analysis quality). More
-    sophisticated checks (e.g., hallucination detection, schema validation) can be
-    added later.
+
+async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
+    """Run the agent on a single payload and evaluate it against structural
+    checks -- never against which specific skill the model chose to call,
+    per .agents/CONTEXT.md §4's rule against asserting on LLM output.
+
+    1. Crash containment: an exception (Gemini/MCP failure, malformed
+       payload) fails this one case with the error captured, instead of
+       taking down the whole evaluation run for every other case too.
+    2. Latency budget.
+    3. Confidence/root-cause consistency: a report that doesn't require
+       human review must actually point at a root cause -- "confidently
+       empty" is a real bug class, not a valid outcome.
+    4. Terminal-wave completeness: root_cause_prioritization and
+       incident_summary must both have run, since combination is required
+       to stay deterministic regardless of selection mode (ADR-004 §3.3,
+       ADR-006). A case that legitimately found nothing to investigate
+       (requires_human_review=True) is exempt from checks 3 and 4 -- see
+       evaluation/datasets/example.jsonl's escalation-case sample.
     """
     start = time.time()
-    report = await analyze_incident_react(payload)
+    try:
+        report = await analyze_incident_react(payload)
+    except Exception as exc:
+        latency = time.time() - start
+        return EvalResult(
+            latency=latency,
+            passed=False,
+            details={"latency": latency, "crash": str(exc)},
+        )
     latency = time.time() - start
 
-    # Basic quality checks - expand as needed.
     passed = True
     details: dict[str, Any] = {
         "latency": latency,
@@ -70,11 +91,22 @@ async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
         details["latency_fail"] = f"{latency:.2f}s > {MAX_LATENCY_SECONDS}s"
 
     if report.requires_human_review:
-        passed = False
-        details["human_review_fail"] = "Report flagged for human review"
+        details["human_review"] = "Report flagged for human review (may be a valid escalation)"
+    else:
+        if not report.root_cause_ranking:
+            passed = False
+            details["confidence_consistency_fail"] = (
+                "Report claims confidence but root_cause_ranking is empty"
+            )
 
-    # Placeholder for other metric checks - they can be added here using the
-    # thresholds imported from `evaluation.config`.
+        terminal_ran = {
+            s.skill_name for s in report.selected_skills if s.trigger_reason == "terminal"
+        }
+        if terminal_ran != _TERMINAL_SKILLS:
+            passed = False
+            details["terminal_wave_fail"] = (
+                f"Expected both terminal skills to run, got: {sorted(terminal_ran)}"
+            )
 
     return EvalResult(latency=latency, passed=passed, details=details)
 

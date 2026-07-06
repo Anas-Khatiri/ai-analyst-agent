@@ -72,6 +72,7 @@ dmypy.json
 # --- Project‑specific generated artefacts ------------------------------------
 logs/
 tmp/
+reports/
 *.log
 
 # --- CI / GitHub Actions ------------------------------------------------------
