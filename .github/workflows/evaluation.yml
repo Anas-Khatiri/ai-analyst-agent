@@ -14,13 +14,12 @@ jobs:
     # default, so an unexpected hang can't silently eat the runner for hours.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - uses: actions/checkout@v6
       - name: Install uv
-        run: curl -LsSf https://github.com/astral-sh/uv/releases/latest/download/uv-installer.sh | sh
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.0" # matches the version pinned in Dockerfile's builder stage
+          enable-cache: true
       - name: Install project dependencies
         run: uv sync --group dev
       - name: Run evaluation
@@ -31,7 +30,7 @@ jobs:
           uv run python -m evaluation.runners.eval_runner evaluation/datasets/example.jsonl
       - name: Upload report artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: evaluation_report
           path: reports/evaluation_report.html
