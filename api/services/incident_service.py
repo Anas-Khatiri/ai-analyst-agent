@@ -3,7 +3,7 @@
 Thin by design: validation already happened at the router (the request body
 is parsed as api.schemas.incidents.IncidentRequest), and everything about
 skill selection, MCP invocation, and report assembly lives in
-agents/react_agent.py -- this module's only job is adapting that
+agents/reasoning/react_agent.py -- this module's only job is adapting that
 entrypoint's dict-based contract to/from typed objects, enforcing a request
 timeout, and translating failures into typed exceptions the router can map
 to clean HTTP responses instead of leaking a raw traceback to the client.
@@ -15,10 +15,10 @@ import asyncio
 import logging
 from uuid import uuid4
 
-from agents.react_agent import analyze_incident_react
+from agents.reasoning.react_agent import analyze_incident_react
 from api.config import APISettings
 from api.schemas.incidents import IncidentRequest, IncidentResponse
-from shared.logging_utils import log_event
+from infra.logging_utils import log_event
 
 _LOGGER = logging.getLogger(__name__)
 

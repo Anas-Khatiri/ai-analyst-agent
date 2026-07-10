@@ -5,7 +5,7 @@ from datetime import datetime
 import _incident_summary_core as core
 from pydantic import BaseModel, ConfigDict
 
-from shared.schemas.finding import Finding
+from domain.finding import Finding
 
 DEFAULT_ROOT_CAUSE_SKILL_NAME = "root_cause_prioritization"
 

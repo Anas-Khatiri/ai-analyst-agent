@@ -24,7 +24,7 @@ class APISettings(BaseSettings):
         extra="ignore",
     )
 
-    default_model: str = "gemini-2.5-flash"
+    default_model: str = "gemini-3.5-flash"
     default_max_tool_calls: int = 6
     request_timeout_seconds: float = 60.0
 

@@ -7,13 +7,13 @@ from datetime import UTC, datetime
 import pytest
 from google.genai.errors import ServerError
 
-from agents.investigation_core import InvestigationSession
-from agents.react_agent import (
+from agents.reasoning.react_agent import (
     _extract_tool_payload,
     _record_tool_observation,
     analyze_incident_react,
 )
-from shared.schemas.incident import IncidentReport
+from agents.workflow.investigation_core import InvestigationSession
+from domain.incident import IncidentReport
 
 _LIVE_API_RETRIES = 3
 _LIVE_API_RETRY_DELAY_SECONDS = 5.0

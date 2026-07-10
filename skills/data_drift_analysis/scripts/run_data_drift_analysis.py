@@ -5,14 +5,14 @@ from datetime import UTC, datetime
 import _data_drift_analysis_core as core
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.finding import (
+from domain.finding import (
     ActionItem,
     EvidenceItem,
     Finding,
     HypothesisCandidate,
     TimeWindow,
 )
-from shared.tools import dataset_access
+from infra.tools import dataset_access
 
 SKILL_NAME = "data_drift_analysis"
 

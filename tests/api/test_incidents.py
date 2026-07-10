@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from api.config import APISettings, get_settings
 from api.main import app
-from shared.schemas.incident import IncidentReport
+from domain.incident import IncidentReport
 
 _TEST_API_KEY = "test-api-key"  # pragma: allowlist secret
 _AUTH_HEADERS = {"X-API-Key": _TEST_API_KEY}

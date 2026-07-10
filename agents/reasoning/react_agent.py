@@ -1,8 +1,8 @@
 """The ML Analyst Agent's sole entrypoint: an LLM-driven ReAct agent that
 dynamically selects investigative skills and invokes them through a real
 MCP (Model Context Protocol) tool call, per
-ADR-004-react-skill-selection.md, ADR-005-mcp-skill-invocation.md, and
-ADR-006-remove-deterministic-mode.md.
+ADR-004-react-skill-selection.md, ADR-005-mcp-skill-invocation.md,
+ADR-006-remove-deterministic-mode.md, and ADR-007-skill-selection-gate.md.
 
 A google-adk `Agent` reads each investigative skill's prose `description`,
 reasons about which is relevant to the incident, calls it (Action), observes
@@ -11,8 +11,14 @@ Action -> Observation multi-turn loop internally once tools are attached to
 the agent -- this module does not hand-roll that loop, it consumes and logs
 the Event stream the Runner produces).
 
+Per ADR-007-skill-selection-gate.md, that ReAct loop only ever sees the
+subset of investigative skills `agents/planning/skill_selector.py::SkillSelector`
+already judged relevant to this incident from metadata alone (never an MCP
+tool definition) -- see `analyze_incident_react` below for how the two
+stages compose.
+
 Everything downstream of selection reuses `execute_wave`/`record_selection`/
-`assemble_report`/`intake` from agents/investigation_core.py unchanged: the
+`assemble_report`/`intake` from agents/workflow/investigation_core.py unchanged: the
 terminal wave (root_cause_prioritization -> incident_summary) and report
 assembly. Combination stays deterministic regardless of how a skill was
 selected, per .agents/CONTEXT.md §6.3.
@@ -25,7 +31,7 @@ tool call, per ADR-005-mcp-skill-invocation.md: a fresh
 services/mcp/skill_mcp_server.py subprocess is spawned per incident, and this
 module connects to it as an MCP client via google-adk's `McpToolset`. The
 incident's `skill_parameters` (Phase 3-5 scoped limitation — see
-agents/investigation_core.py's module docstring) are passed to the server via
+agents/workflow/investigation_core.py's module docstring) are passed to the server via
 an environment variable at subprocess launch, *before* any tool schema is
 ever shown to the LLM — every tool the server advertises is genuinely
 zero-argument, so the LLM's only decision is *whether* a tool is relevant,
@@ -52,28 +58,29 @@ from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
 from google.genai import types
 from mcp import StdioServerParameters
 
-from agents.investigation_core import (
+from agents.planning.skill_selection_engine import SkillSelectionEngine
+from agents.planning.skill_selector import SkillSelector
+from agents.workflow.investigation_core import (
     InvestigationSession,
     assemble_report,
     execute_wave,
     intake,
     record_selection,
 )
-from agents.skill_selection_engine import SkillSelectionEngine
-from shared.logging_utils import log_event
-from shared.schemas.finding import Finding
-from shared.schemas.incident import (
+from domain.finding import Finding
+from domain.incident import (
     IncidentReport,
     IncidentSignature,
     RawTrigger,
     SkillSelectionRecord,
 )
-from shared.skill_registry import SkillRegistry
+from infra.logging_utils import log_event
+from infra.skill_registry import SkillRegistry
 
 _LOGGER = logging.getLogger(__name__)
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
 MAX_TOOL_CALLS = 6
 APP_NAME = "ml_analyst_react"
 USER_ID = "ml_analyst_agent"
@@ -103,15 +110,26 @@ def _build_initial_message(signature: IncidentSignature) -> str:
     )
 
 
-def build_skill_mcp_toolset(skill_parameters: dict[str, dict[str, object]]) -> McpToolset:
+def build_skill_mcp_toolset(
+    skill_parameters: dict[str, dict[str, object]],
+    selected_skill_names: set[str] | None = None,
+) -> McpToolset:
     """Builds the MCP client toolset for one incident investigation.
 
     Spawns services/mcp/skill_mcp_server.py as a fresh stdio subprocess,
     passing the incident's resolved `skill_parameters` via an environment
     variable read once at server startup — see module docstring for why this
     keeps every advertised tool genuinely zero-argument.
+
+    `selected_skill_names`, per ADR-007-skill-selection-gate.md, restricts
+    which investigative skills the spawned server even registers as MCP
+    tools: `None` exposes every investigative skill (pre-ADR-007 behavior);
+    a concrete set (including empty) is passed through as-is so only that
+    subset is ever visible to the ReAct loop's LLM.
     """
     env = {**os.environ, "SKILL_PARAMETERS_JSON": json.dumps(skill_parameters)}
+    if selected_skill_names is not None:
+        env["SELECTED_SKILLS_JSON"] = json.dumps(sorted(selected_skill_names))
     return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
@@ -304,11 +322,14 @@ async def analyze_incident_react(
         mode="react",
     )
 
-    has_investigative_skills = any(
-        meta.role == "investigative" for meta in registry.registry.values()
-    )
-    if has_investigative_skills:
-        toolset = build_skill_mcp_toolset(raw.skill_parameters)
+    selector = SkillSelector(registry, model)
+    selection_result = await selector.select(signature, raw.skill_parameters)
+    session.selection_records.extend(selection_result.records)
+
+    if selection_result.selected_skill_names:
+        toolset = build_skill_mcp_toolset(
+            raw.skill_parameters, set(selection_result.selected_skill_names)
+        )
         try:
             await _run_react_loop(signature, toolset, session, model, max_tool_calls)
         finally:

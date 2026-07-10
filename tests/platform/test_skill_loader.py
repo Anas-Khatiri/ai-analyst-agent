@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from shared.schemas.finding import Finding
-from shared.skill_loader import execute_skill, load_skill_script
-from shared.skill_registry import SkillRegistry
+from domain.finding import Finding
+from infra.skill_loader import execute_skill, load_skill_script
+from infra.skill_registry import SkillRegistry
 
 
 def test_load_skill_script_returns_module_with_run_entrypoint() -> None:

@@ -4,8 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.evidence_ledger import fingerprint as compute_fingerprint
-from shared.schemas.finding import EvidenceItem, Finding
+from domain.evidence_ledger import fingerprint as compute_fingerprint
+from domain.finding import EvidenceItem, Finding
 
 ConfidenceBand = Literal["high", "medium", "low"]
 

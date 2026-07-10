@@ -57,7 +57,11 @@ jobs:
   test:
     name: Test (pytest)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Generous on purpose: the live-gated tests below make real Gemini calls,
+    # and the SDK's own internal retry/backoff on a transient 503 ("high
+    # demand") can stretch a single call well past a minute -- see
+    # evaluation/config.py's MAX_LATENCY_SECONDS comment for a measured case.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
 
@@ -72,10 +76,9 @@ jobs:
         run: uv sync --group dev
 
       - name: Run test suite
-        # No GEMINI_API_KEY on purpose: this job stays free, fast, and
-        # deterministic on every push/PR -- the live-gated tests auto-skip
-        # without a real key. The separate evaluation.yml workflow is what
-        # exercises the real agent against a real Gemini key.
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_GENAI_USE_ENTERPRISE: false
         run: uv run pytest -q
 
   docker:

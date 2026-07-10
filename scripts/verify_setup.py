@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 # Load dotenv if available
 from dotenv import load_dotenv
+
+# Transient Gemini API errors worth retrying (e.g. "high demand" 503s).
+_RETRYABLE_STATUS_CODES = {429, 500, 503}
+_MAX_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS = 5
 
 
 def verify_environment() -> bool:
@@ -49,23 +55,36 @@ def verify_environment() -> bool:
 
     # 3. Test API connectivity with a simple check
     print("Attempting to connect to Gemini API...")
-    try:
-        from google.genai import Client
+    from google.genai import Client
 
-        # The Client resolves the API key from GEMINI_API_KEY automatically
-        client = Client()
-        # Test request using a fast model
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Say 'System ready' if you can read this.",
-        )
-        if response and response.text:
-            print(f"✅ Gemini API communication succeeded. Response: '{response.text.strip()}'")
-        else:
-            print("❌ Gemini API returned an empty response.", file=sys.stderr)
+    # The Client resolves the API key from GEMINI_API_KEY automatically
+    client = Client()
+
+    response = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents="Say 'System ready' if you can read this.",
+            )
+            break
+        except Exception as e:
+            status_code = getattr(e, "code", None) or getattr(e, "status_code", None)
+            is_retryable = status_code in _RETRYABLE_STATUS_CODES or "UNAVAILABLE" in str(e)
+            if is_retryable and attempt < _MAX_ATTEMPTS:
+                print(
+                    f"⚠️  Attempt {attempt}/{_MAX_ATTEMPTS} failed ({e}); "
+                    f"retrying in {_RETRY_BACKOFF_SECONDS}s (transient server error)...",
+                )
+                time.sleep(_RETRY_BACKOFF_SECONDS)
+                continue
+            print(f"❌ Gemini API communication failed: {e}", file=sys.stderr)
             return False
-    except Exception as e:
-        print(f"❌ Gemini API communication failed: {e}", file=sys.stderr)
+
+    if response and response.text:
+        print(f"✅ Gemini API communication succeeded. Response: '{response.text.strip()}'")
+    else:
+        print("❌ Gemini API returned an empty response.", file=sys.stderr)
         return False
 
     print("=== All Verification Checks Passed ===")

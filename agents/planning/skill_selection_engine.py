@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.skill_registry import SkillMetadata, SkillRegistry
+from infra.skill_registry import SkillMetadata, SkillRegistry, missing_required_inputs
 
 ExecutionMode = Literal["parallel", "sequential"]
 TriggerReason = Literal["signal_match", "evidence_triggered", "fallback", "terminal"]
@@ -144,11 +144,7 @@ class SkillSelectionEngine:
                     ExcludedCandidate(skill_name=meta.name, reason="already executed this session")
                 )
                 continue
-            missing = [
-                key
-                for key in meta.required_inputs
-                if key not in skill_parameters.get(meta.name, {})
-            ]
+            missing = missing_required_inputs(meta, skill_parameters)
             if missing:
                 excluded.append(
                     ExcludedCandidate(

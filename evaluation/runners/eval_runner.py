@@ -3,11 +3,11 @@
 """Minimal evaluation runner.
 
 The runner loads a JSONL file where each line is a trigger payload compatible with
-`agents.react_agent.analyze_incident_react`. For each case it:
+`agents.reasoning.react_agent.analyze_incident_react`. For each case it:
 
 1. Starts a trace collector (currently a stub - can be expanded later).
 2. Calls the agent asynchronously (a real Gemini call + a real MCP server
-   subprocess per case — see agents/react_agent.py).
+   subprocess per case — see agents/reasoning/react_agent.py).
 3. Measures latency.
 4. Computes basic quality-gate checks using the thresholds defined in
    `evaluation.config`.
@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 # Import the agent entrypoint
-from agents.react_agent import analyze_incident_react
+from agents.reasoning.react_agent import analyze_incident_react
 from evaluation.config import (
     CASE_TIMEOUT_SECONDS,
     EVALUATION_PASS_RATE_THRESHOLD,

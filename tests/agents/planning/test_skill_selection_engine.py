@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from agents.skill_selection_engine import SkillSelectionEngine
-from shared.skill_registry import SkillRegistry
+from agents.planning.skill_selection_engine import SkillSelectionEngine
+from infra.skill_registry import SkillRegistry
 
 
 def _engine() -> SkillSelectionEngine:

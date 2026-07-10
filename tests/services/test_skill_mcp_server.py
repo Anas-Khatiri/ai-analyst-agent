@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from infra.skill_registry import SkillRegistry
 from services.mcp.skill_mcp_server import build_server, invoke_investigative_skill
-from shared.skill_registry import SkillRegistry
 
 
 def _registry() -> SkillRegistry:
@@ -64,6 +64,29 @@ async def test_invoke_investigative_skill_executes_skill_and_returns_finding_dic
     confidence_score = result["confidence_score"]
     assert isinstance(confidence_score, float)
     assert confidence_score >= 0.8
+
+
+async def test_build_server_honors_selected_skill_names_subset() -> None:
+    server = build_server(
+        registry=_registry(), skill_parameters={}, selected_skill_names={"data_drift_analysis"}
+    )
+
+    tools = await server.list_tools()
+    assert {tool.name for tool in tools} == {"data_drift_analysis"}
+
+
+async def test_build_server_empty_selected_skill_names_exposes_nothing() -> None:
+    server = build_server(registry=_registry(), skill_parameters={}, selected_skill_names=set())
+
+    tools = await server.list_tools()
+    assert tools == []
+
+
+async def test_build_server_none_selected_skill_names_exposes_all_investigative() -> None:
+    server = build_server(registry=_registry(), skill_parameters={}, selected_skill_names=None)
+
+    tools = await server.list_tools()
+    assert {tool.name for tool in tools} == {"data_drift_analysis", "model_performance_analysis"}
 
 
 async def test_invoke_investigative_skill_returns_error_dict_on_bad_params() -> None:

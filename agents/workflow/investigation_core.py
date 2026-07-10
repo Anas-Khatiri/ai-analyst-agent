@@ -1,7 +1,7 @@
 """Shared investigation pipeline: intake, skill execution, and report
 assembly, per ADR-006-remove-deterministic-mode.md.
 
-`agents/react_agent.py::analyze_incident_react` is the sole caller of this
+`agents/reasoning/react_agent.py::analyze_incident_react` is the sole caller of this
 module. It reasons over investigative skills' prose descriptions via an LLM
 and invokes them through a real MCP tool call (per
 ADR-004-react-skill-selection.md as amended by
@@ -13,7 +13,7 @@ Combination stays deterministic regardless of how a skill was selected
 
 This module never imports a skill module by name. Every skill is resolved
 generically through the SkillRegistry (parsed from each SKILL.md's YAML
-frontmatter) and invoked through shared/skill_loader.py — adding a fifth
+frontmatter) and invoked through infra/skill_loader.py — adding a fifth
 skill to skills/ requires zero changes here, per ADR-001-dynamic-skills.md.
 
 Phase 3-5 scoped limitation: the caller must supply `skill_parameters` in
@@ -30,19 +30,19 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from agents.skill_selection_engine import SelectionPlan
-from shared.logging_utils import log_event
-from shared.schemas.evidence_ledger import EvidenceLedger
-from shared.schemas.finding import ActionItem, Finding, HypothesisCandidate
-from shared.schemas.incident import (
+from agents.planning.skill_selection_engine import SelectionPlan
+from domain.evidence_ledger import EvidenceLedger
+from domain.finding import ActionItem, Finding, HypothesisCandidate
+from domain.incident import (
     ContextMetadata,
     IncidentReport,
     IncidentSignature,
     RawTrigger,
     SkillSelectionRecord,
 )
-from shared.skill_loader import execute_skill
-from shared.skill_registry import SkillRegistry
+from infra.logging_utils import log_event
+from infra.skill_loader import execute_skill
+from infra.skill_registry import SkillRegistry
 
 _LOGGER = logging.getLogger(__name__)
 

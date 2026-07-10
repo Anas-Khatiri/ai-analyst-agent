@@ -5,14 +5,14 @@ from datetime import UTC, datetime
 import _model_performance_analysis_core as core
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.finding import (
+from domain.finding import (
     ActionItem,
     EvidenceItem,
     Finding,
     HypothesisCandidate,
     TimeWindow,
 )
-from shared.tools import prediction_access
+from infra.tools import prediction_access
 
 SKILL_NAME = "model_performance_analysis"
 DEFAULT_PRIMARY_METRICS = ["accuracy", "precision", "recall", "f1_score", "fpr", "fnr"]

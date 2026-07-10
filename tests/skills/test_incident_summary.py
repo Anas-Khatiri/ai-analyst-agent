@@ -22,7 +22,7 @@ from run_incident_summary import IncidentSummaryInput, run  # noqa: E402
 from run_model_performance_analysis import run as run_model_performance_analysis  # noqa: E402
 from run_root_cause_prioritization import run as run_root_cause_prioritization  # noqa: E402
 
-from shared.schemas.finding import (  # noqa: E402
+from domain.finding import (  # noqa: E402
     ActionItem,
     EvidenceItem,
     Finding,

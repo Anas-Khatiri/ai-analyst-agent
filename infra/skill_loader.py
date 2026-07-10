@@ -5,9 +5,9 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-from shared.schemas.finding import Finding
-from shared.security.exceptions import SecurityError
-from shared.skill_registry import SkillMetadata
+from domain.finding import Finding
+from infra.security.exceptions import SecurityError
+from infra.skill_registry import SkillMetadata
 
 
 def load_skill_script(script_path: Path) -> ModuleType:
@@ -46,7 +46,7 @@ async def execute_skill(
 
     Exceptions propagate uncaught — this function never decides what a
     failure means. The caller (the Skill Executor stage in
-    agents/investigation_core.py) is responsible for catching a failure and
+    agents/workflow/investigation_core.py) is responsible for catching a failure and
     marking that skill "unavailable" per ml_analyst_agent.md §11, rather
     than this loader silently swallowing or reinterpreting it.
 

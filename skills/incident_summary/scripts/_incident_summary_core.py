@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.finding import ActionItem, EvidenceItem, Finding
+from domain.finding import ActionItem, EvidenceItem, Finding
 
 ConfidenceBand = Literal["high", "medium", "low"]
 

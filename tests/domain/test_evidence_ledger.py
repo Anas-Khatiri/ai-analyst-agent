@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from shared.schemas.evidence_ledger import EvidenceLedger, fingerprint
-from shared.schemas.finding import EvidenceItem, Finding, TimeWindow
+from domain.evidence_ledger import EvidenceLedger, fingerprint
+from domain.finding import EvidenceItem, Finding, TimeWindow
 
 _WINDOW = TimeWindow(start=datetime.now(UTC), end=datetime.now(UTC))
 

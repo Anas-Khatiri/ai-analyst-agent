@@ -2,7 +2,7 @@ import asyncio
 import time
 from datetime import UTC, datetime
 
-from agents.react_agent import analyze_incident_react
+from agents.reasoning.react_agent import analyze_incident_react
 from evaluation.config import MAX_LATENCY_SECONDS
 
 
@@ -10,7 +10,7 @@ async def main() -> None:
     """Run a single incident through the agent and assert core thresholds.
 
     This harness makes a real Gemini call and spawns a real MCP server
-    subprocess per run (agents/react_agent.py) — it is no longer a free,
+    subprocess per run (agents/reasoning/react_agent.py) — it is no longer a free,
     deterministic check, since Mode 1 (the rule-based deterministic agent)
     was removed per ADR-006-remove-deterministic-mode.md. Results can vary
     run to run depending on which investigative skill(s) the model chooses

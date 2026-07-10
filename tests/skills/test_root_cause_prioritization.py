@@ -20,7 +20,7 @@ from run_data_drift_analysis import run as run_data_drift_analysis  # noqa: E402
 from run_model_performance_analysis import run as run_model_performance_analysis  # noqa: E402
 from run_root_cause_prioritization import RootCausePrioritizationInput, run  # noqa: E402
 
-from shared.schemas.finding import (  # noqa: E402
+from domain.finding import (  # noqa: E402
     ActionItem,
     EvidenceItem,
     Finding,

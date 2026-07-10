@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import _root_cause_prioritization_core as core
 from pydantic import BaseModel, ConfigDict
 
-from shared.schemas.finding import (
+from domain.finding import (
     ActionItem,
     EvidenceItem,
     Finding,

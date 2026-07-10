@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.finding import EvidenceItem, Finding
+from domain.finding import EvidenceItem, Finding
 
 
 def normalize_token(value: str) -> str:

@@ -1,11 +1,17 @@
-import structlog
+import logging
+
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.responses import JSONResponse
 
 # Import configuration, logging and instrumentation
 from api.routers import incidents
-from shared.logging_config import configure_logging
+from infra.logging_utils import log_event
+
+# log_event (per .agents/CONTEXT.md §3) already renders each record as a
+# JSON string; format="%(message)s" emits that string verbatim instead of
+# wrapping it in stdlib's default "LEVEL:name:message" prefix.
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 app = FastAPI(title="ml-analyst-agent", version="0.1.0")
 instrumentor = Instrumentator()
@@ -13,9 +19,7 @@ instrumentor.instrument(app).expose(app)
 
 app.include_router(incidents.router)
 
-# Initialize logging
-configure_logging()
-logger = structlog.get_logger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 
 # Health endpoints
@@ -38,5 +42,5 @@ def liveness() -> JSONResponse:
 # Example ping endpoint using logger
 @app.get("/ping")
 def ping() -> JSONResponse:
-    logger.info("ping endpoint called")
+    log_event(_LOGGER, logging.INFO, __name__, "ping", "ping_endpoint_called")
     return JSONResponse(content={"ping": "pong"})

@@ -40,7 +40,8 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy all project modules and directories (excluding gitignored files)
 COPY agents/ agents/
 COPY skills/ skills/
-COPY shared/ shared/
+COPY domain/ domain/
+COPY infra/ infra/
 COPY services/ services/
 COPY api/ api/
 

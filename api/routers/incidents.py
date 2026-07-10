@@ -2,7 +2,7 @@
 
 Synchronous by design (see docs/api/incidents_endpoint.md): a real
 investigation makes a live Gemini call and spawns a real MCP server
-subprocess (agents/react_agent.py), so a single request can take on the
+subprocess (agents/reasoning/react_agent.py), so a single request can take on the
 order of 8-20 seconds. The request body is validated as
 api.schemas.incidents.IncidentRequest before the agent ever runs -- a
 malformed body never reaches the agent.

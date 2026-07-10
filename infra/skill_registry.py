@@ -75,6 +75,10 @@ class SkillRegistry:
         terminal = [meta for meta in self.registry.values() if meta.role != "investigative"]
         return sorted(terminal, key=lambda meta: meta.terminal_order or 0)
 
+    def investigative_skills(self) -> list[SkillMetadata]:
+        """Every investigative skill, in registry order. Mirrors terminal_skills()."""
+        return [meta for meta in self.registry.values() if meta.role == "investigative"]
+
     def get(self, name: str) -> SkillMetadata | None:
         return self.registry.get(name)
 
@@ -83,3 +87,14 @@ class SkillRegistry:
 
     def is_empty(self) -> bool:
         return not self.registry
+
+
+def missing_required_inputs(
+    meta: SkillMetadata, skill_parameters: dict[str, dict[str, object]]
+) -> list[str]:
+    """Required input keys `meta` declares that aren't present in
+    `skill_parameters[meta.name]`. The single source of truth for "can this
+    skill structurally run at all," shared by SkillSelectionEngine's wave
+    assembly and agents/planning/skill_selector.py's pre-ReAct filter."""
+    supplied = skill_parameters.get(meta.name, {})
+    return [key for key in meta.required_inputs if key not in supplied]

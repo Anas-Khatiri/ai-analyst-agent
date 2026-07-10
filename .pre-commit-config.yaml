@@ -79,7 +79,7 @@ repos:
         entry: uv run semgrep scan --quiet --error --config hooks/semgrep/no_raw_shell_exec.yaml
         language: system
         pass_filenames: false
-        files: ^(agents|api|services|shared|skills)/.*\.py$
+        files: ^(agents|api|domain|infra|services|skills)/.*\.py$
 
       - id: pytest
         name: pytest
@@ -90,7 +90,7 @@ repos:
         stages: [pre-push]
       - id: pytest-commit
         name: pytest (commit)
-        entry: env -u GEMINI_API_KEY uv run pytest -q
+        entry: uv run pytest -q
         language: system
         types: [python]
         pass_filenames: false

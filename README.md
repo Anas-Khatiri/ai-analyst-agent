@@ -7,14 +7,16 @@ An autonomous AI Agent platform designed to monitor production data pipelines, m
 ```
 ml-analyst-agent/
 ├── .agents/       # Project customizations and local guardrails (CONTEXT.md)
-├── agents/        # ML Analyst Agent: react_agent.py (entrypoint), investigation_core.py, skill_selection_engine.py
+├── agents/        # ML Analyst Agent: planning/ (skill_selector.py, skill_selection_engine.py),
+│                  #   reasoning/ (react_agent.py, the entrypoint), workflow/ (investigation_core.py)
 ├── api/           # FastAPI application: routers/, schemas/, services/, config.py, main.py
+├── domain/        # Business/domain models: Finding, Incident, EvidenceLedger contracts
 ├── docs/          # Project documentation (specifications, architecture, decisions)
 ├── evaluation/    # Evaluation datasets (evaluation/datasets/) and runner scripts
 ├── hooks/         # Pre-commit and static validation hooks
+├── infra/         # Cross-cutting infrastructure: skill_registry.py, skill_loader.py,
+│                  #   logging_utils.py, security/, tools/ (typed wrappers)
 ├── services/      # Infrastructure adapters, e.g. services/mock_env/*.py, services/mcp/ (MCP server)
-├── shared/        # Cross-cutting code: schemas/ (Finding, incident, evidence ledger contracts),
-│                  #   tools/ (typed wrappers), skill_registry.py, skill_loader.py
 ├── skills/        # Skill specs (SKILL.md) plus each skill's scripts/ implementation
 ├── tests/         # Unit and integration tests
 ├── .venv/         # Isolated virtual environment
@@ -55,7 +57,7 @@ ml-analyst-agent/
 
 ## Running the API
 
-The FastAPI application (`api/main.py`) exposes the ReAct/MCP agent (`agents/react_agent.py::analyze_incident_react`) over HTTP.
+The FastAPI application (`api/main.py`) exposes the ReAct/MCP agent (`agents/reasoning/react_agent.py::analyze_incident_react`) over HTTP.
 
 ### Launch it
 

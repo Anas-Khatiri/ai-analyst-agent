@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from shared.schemas.finding import ActionItem, Finding, HypothesisCandidate
+from domain.finding import ActionItem, Finding, HypothesisCandidate
 
 Severity = Literal["low", "medium", "high", "critical"]
 SystemType = Literal[
@@ -60,7 +60,7 @@ class RawTrigger(BaseModel):
             "Phase 3-5 scoped limitation: concrete kwargs per skill name, supplied "
             "by whoever raises the incident, since no real feature-store/context "
             "resolution exists yet to derive these automatically. See "
-            "agents/investigation_core.py module docstring."
+            "agents/workflow/investigation_core.py module docstring."
         ),
     )
 
