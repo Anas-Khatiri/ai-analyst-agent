@@ -49,15 +49,19 @@ class EvalResult:
 
 _TERMINAL_SKILLS = {"root_cause_prioritization", "incident_summary"}
 
-# Substrings identifying a Gemini free-tier quota/rate-limit rejection (both
-# the daily cap and the per-minute burst limit surface as RESOURCE_EXHAUSTED
-# with a 429 status) -- distinct from a real agent/skill bug, and excluded
-# from the pass-rate gate below rather than counted as a failure.
-_QUOTA_MARKERS = ("RESOURCE_EXHAUSTED", "429")
+# Substrings identifying a Gemini-side condition that isn't a code
+# regression: a free-tier quota/rate-limit rejection (RESOURCE_EXHAUSTED,
+# 429 -- both the daily cap and the per-minute burst limit surface this way)
+# or a transient server overload (UNAVAILABLE, 503 -- "high demand", per
+# Gemini's own error message). Both are excluded from the pass-rate gate
+# below rather than counted as a failure; see evaluation/config.py's
+# MAX_LATENCY_SECONDS comment for how disruptive a 503 was observed to be
+# even when the SDK's own retry/backoff eventually succeeds.
+_TRANSIENT_GEMINI_ERROR_MARKERS = ("RESOURCE_EXHAUSTED", "429", "UNAVAILABLE", "503")
 
 
-def _is_quota_exhausted(error_message: str) -> bool:
-    return any(marker in error_message for marker in _QUOTA_MARKERS)
+def _is_transient_gemini_error(error_message: str) -> bool:
+    return any(marker in error_message for marker in _TRANSIENT_GEMINI_ERROR_MARKERS)
 
 
 async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
@@ -102,8 +106,8 @@ async def evaluate_one(payload: dict[str, Any]) -> EvalResult:
         latency = time.time() - start
         error_message = str(exc)
         crash_details: dict[str, Any] = {"latency": latency, "crash": error_message}
-        if _is_quota_exhausted(error_message):
-            crash_details["quota_exhausted"] = True
+        if _is_transient_gemini_error(error_message):
+            crash_details["transient_gemini_error"] = True
         return EvalResult(latency=latency, passed=False, details=crash_details)
     latency = time.time() - start
 
@@ -158,20 +162,20 @@ async def _async_file_reader(path: Path) -> AsyncIterator[str]:
 
 def summarize(results: list[EvalResult]) -> None:
     total = len(results)
-    quota_exhausted = [r for r in results if r.details.get("quota_exhausted")]
-    gated = [r for r in results if not r.details.get("quota_exhausted")]
+    excluded = [r for r in results if r.details.get("transient_gemini_error")]
+    gated = [r for r in results if not r.details.get("transient_gemini_error")]
 
     print("=== Evaluation Summary ===")
     print(f"Cases evaluated : {total}")
-    if quota_exhausted:
+    if excluded:
         print(
-            f"Excluded (quota/rate-limit hit): {len(quota_exhausted)} -- Gemini free-tier "
-            "limit, not a code regression; excluded from the pass-rate gate below"
+            f"Excluded (Gemini quota/rate-limit or server overload): {len(excluded)} -- "
+            "not a code regression; excluded from the pass-rate gate below"
         )
 
     if not gated:
-        print("No cases produced a real result (all hit quota/rate limits) -- inconclusive,")
-        print("not treated as pass or fail. Retry once quota resets.")
+        print("No cases produced a real result (all hit a Gemini quota/rate limit or")
+        print("server overload) -- inconclusive, not treated as pass or fail. Retry later.")
         return
 
     passed = sum(r.passed for r in gated)
