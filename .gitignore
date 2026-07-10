@@ -82,6 +82,12 @@ reports/
 docs/
 .agents/
 
+# --- Local-only dev tooling config (kept on disk, not pushed to GitHub) -------
+CHANGELOG.md
+.secrets.baseline
+.pre-commit-config.yaml
+.semgrep.yml
+
 # --------------------------------------------------------------
 # End of .gitignore
 # --------------------------------------------------------------
